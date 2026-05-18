@@ -105,6 +105,63 @@ function getSelectedIdsFromContainer(containerId) {
     return Array.from(document.querySelectorAll(`#${containerId} [data-id]`)).map(el => el.dataset.id);
 }
 
+function normalizeRelatedCardRole(card) {
+    return card?.cardVariant === 'enhance' || card?.cardVariant === 'true' ? card.cardVariant : 'base';
+}
+
+function getBaseCardForRecord(record, allRecords) {
+    if (!record) return null;
+
+    const records = (allRecords || []).filter(Boolean);
+    const recordsById = new Map(records.map(item => [String(item.id), item]));
+    const role = normalizeRelatedCardRole(record);
+
+    if (role !== 'base' && record.baseCardId) {
+        return recordsById.get(String(record.baseCardId)) || record;
+    }
+
+    const parent = records.find(item =>
+        String(item?.enhanceCardId || '') === String(record.id) ||
+        String(item?.trueCardId || '') === String(record.id)
+    );
+
+    return parent || record;
+}
+
+async function normalizeRecordIdsToBaseIds(storeName, ids, options = {}) {
+    const { dedupe = true } = options;
+    const allRecords = ((await getData(storeName)) || []).filter(Boolean);
+    const recordsById = new Map(allRecords.map(item => [String(item.id), item]));
+    const normalizedIds = [];
+    const seenIds = new Set();
+
+    for (const id of ids || []) {
+        const record = recordsById.get(String(id));
+        if (!record) continue;
+
+        const baseRecord = getBaseCardForRecord(record, allRecords);
+        const baseId = String(baseRecord?.id || record.id || '');
+        if (!baseId) continue;
+        if (dedupe && seenIds.has(baseId)) continue;
+
+        seenIds.add(baseId);
+        normalizedIds.push(baseId);
+    }
+
+    return normalizedIds;
+}
+
+async function normalizeRecordsToBaseRecords(storeName, records, options = {}) {
+    const ids = await normalizeRecordIdsToBaseIds(
+        storeName,
+        (records || []).map(record => record?.id).filter(Boolean),
+        options
+    );
+
+    const normalizedRecords = await Promise.all(ids.map(id => getData(storeName, id)));
+    return normalizedRecords.filter(Boolean);
+}
+
 function hasBaseCharacterImage(snapshot) {
     return Boolean(snapshot?.characterImageFile || snapshot?.characterImage);
 }
@@ -226,17 +283,20 @@ async function restoreCharacterFormSnapshot(snapshot, options = {}) {
 
     populatePericiasCheckboxes(currentCharacterFormType === 'creature' ? [] : (snapshot.selectedPericias || []));
 
-    for (const magicId of snapshot.selectedMagicIds || []) {
+    const restoredMagicIds = await normalizeRecordIdsToBaseIds('rpgEffects', snapshot.selectedMagicIds || []);
+    for (const magicId of restoredMagicIds) {
         const magicData = await getData('rpgEffects', magicId);
         if (magicData) createSelectedElement(magicData, magicData.type === 'habilidade' ? 'skill' : 'magic');
     }
 
-    for (const skillId of snapshot.selectedSkillIds || []) {
+    const restoredSkillIds = await normalizeRecordIdsToBaseIds('rpgEffects', snapshot.selectedSkillIds || []);
+    for (const skillId of restoredSkillIds) {
         const skillData = await getData('rpgEffects', skillId);
         if (skillData) createSelectedElement(skillData, 'skill');
     }
 
-    for (const attackId of snapshot.selectedAttackIds || []) {
+    const restoredAttackIds = await normalizeRecordIdsToBaseIds('rpgEffects', snapshot.selectedAttackIds || []);
+    for (const attackId of restoredAttackIds) {
         const attackData = await getData('rpgEffects', attackId);
         if (attackData) createSelectedElement(attackData, 'attack');
     }
@@ -246,7 +306,7 @@ async function restoreCharacterFormSnapshot(snapshot, options = {}) {
         if (relatedCharData?.cardType === 'creature') createSelectedElement(relatedCharData, 'relationship');
     }
 
-    currentCharacterItems = (snapshot.items || []).slice();
+    currentCharacterItems = await normalizeRecordsToBaseRecords('rpgItems', snapshot.items || [], { dedupe: false });
     document.getElementById('form-inventory-section').classList.toggle('hidden', currentCharacterFormType === 'creature');
     renderInventoryForForm(currentCharacterItems, parseInt(snapshot.forca, 10) || 0);
 
@@ -754,14 +814,20 @@ export async function saveCharacterCard(cardForm) {
         ? backgroundImageFile.type
         : (baseBackgroundSource?.mimeType || (existingData ? existingData.backgroundMimeType : null));
 
-    const itemIds = isCreature ? [] : currentCharacterItems.map(item => item.id);
+    const itemIds = isCreature
+        ? []
+        : await normalizeRecordIdsToBaseIds('rpgItems', currentCharacterItems.map(item => item.id), { dedupe: false });
 
-    const magicIds = isCreature ? [] : [
-        ...Array.from(document.querySelectorAll('#selected-magics-container [data-id]')),
-        ...Array.from(document.querySelectorAll('#selected-skills-container [data-id]'))
-    ].map(el => el.dataset.id);
+    const magicIds = isCreature
+        ? []
+        : await normalizeRecordIdsToBaseIds('rpgEffects', [
+            ...Array.from(document.querySelectorAll('#selected-magics-container [data-id]')),
+            ...Array.from(document.querySelectorAll('#selected-skills-container [data-id]'))
+        ].map(el => el.dataset.id));
 
-    const attackIds = isCreature ? [] : Array.from(document.querySelectorAll('#selected-attacks-container [data-id]')).map(el => el.dataset.id);
+    const attackIds = isCreature
+        ? []
+        : await normalizeRecordIdsToBaseIds('rpgEffects', Array.from(document.querySelectorAll('#selected-attacks-container [data-id]')).map(el => el.dataset.id));
     const relationshipIds = isCreature
         ? []
         : Array.from(new Set([
@@ -888,7 +954,8 @@ export async function editCard(cardId) {
     populatePericiasCheckboxes(currentCharacterFormType === 'creature' ? [] : attrs.pericias);
 
     if (currentCharacterFormType !== 'creature' && cardData.spells) {
-        for (const magicId of cardData.spells) {
+        const spellIds = await normalizeRecordIdsToBaseIds('rpgEffects', cardData.spells);
+        for (const magicId of spellIds) {
             const magicData = await getData('rpgEffects', magicId);
             if (magicData) {
                 const renderType = magicData.type === 'habilidade' ? 'skill' : 'magic';
@@ -898,7 +965,8 @@ export async function editCard(cardId) {
     }
 
     if (currentCharacterFormType !== 'creature' && cardData.attacks) {
-        for (const attackId of cardData.attacks) {
+        const attackIds = await normalizeRecordIdsToBaseIds('rpgEffects', cardData.attacks);
+        for (const attackId of attackIds) {
             const attackData = await getData('rpgEffects', attackId);
             if (attackData) createSelectedElement(attackData, 'attack');
         }
@@ -921,7 +989,7 @@ export async function editCard(cardId) {
     }
 
     const items = cardData.items ? (await Promise.all(cardData.items.map(id => getData('rpgItems', id)))).filter(Boolean) : [];
-    currentCharacterItems = items;
+    currentCharacterItems = await normalizeRecordsToBaseRecords('rpgItems', items, { dedupe: false });
     document.getElementById('form-inventory-section').classList.toggle('hidden', currentCharacterFormType === 'creature');
     renderInventoryForForm(currentCharacterItems, attrs.forca || 0);
 
@@ -1016,17 +1084,21 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    document.addEventListener('addItemToCharacter', (e) => {
+    document.addEventListener('addItemToCharacter', async (e) => {
         const { data, type } = e.detail;
 
         if (type === 'magic') {
-            const finalType = data.type === 'habilidade' ? 'skill' : 'magic';
-            createSelectedElement(data, finalType);
+            const [baseData] = await normalizeRecordsToBaseRecords('rpgEffects', [data]);
+            const finalData = baseData || data;
+            const finalType = finalData.type === 'habilidade' ? 'skill' : 'magic';
+            createSelectedElement(finalData, finalType);
         } else if (type === 'item') {
-            currentCharacterItems.push(data);
+            const [baseData] = await normalizeRecordsToBaseRecords('rpgItems', [data], { dedupe: false });
+            currentCharacterItems.push(baseData || data);
             renderInventoryForForm(currentCharacterItems, parseInt(document.getElementById('forca').value) || 0);
         } else if (type === 'attack') {
-            createSelectedElement(data, 'attack');
+            const [baseData] = await normalizeRecordsToBaseRecords('rpgEffects', [data]);
+            createSelectedElement(baseData || data, 'attack');
         }
     });
 

@@ -226,8 +226,8 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
         const aumentosFixos = spellData.aumentos.filter(a => (a?.tipo || 'fixo') === 'fixo');
         const createList = (list, title, color) => {
             if (list.length === 0) return '';
-            const items = list.map(a => `<li><span class="font-semibold">${a.nome}:</span> ${a.valor > 0 ? '+' : ''}${a.valor}</li>`).join('');
-            return `<div class="mb-2"><h5 class="font-bold text-sm ${color}">${title}</h5><ul class="list-disc list-inside text-xs">${items}</ul></div>`;
+            const items = list.map(a => `<li><span class="font-semibold">${escapeHtml(a.nome)}:</span> ${a.valor > 0 ? '+' : ''}${escapeHtml(a.valor)}</li>`).join('');
+            return `<div class="mb-2"><h5 class="font-bold text-sm ${color}">${escapeHtml(title)}</h5><ul class="list-disc list-inside text-xs">${items}</ul></div>`;
         };
         
         aumentosHtml = `
@@ -283,9 +283,9 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
         const content = hidden ? '-' : (value || '-');
 
         return `
-            <div class="scroll-section" data-bg-type="main" style="${content === '-' ? 'display: none;' : ''}"}>
-                <h3 class="text-sm font-semibold flex items-center gap-2">${label}</h3>
-                <p class="text-gray-300 text-xs leading-relaxed mt-1" style="white-space: break-spaces;text-align: justify;">${content}</p>
+            <div class="scroll-section" data-bg-type="main" style="${content === '-' ? 'display: none;' : ''}">
+                <h3 class="text-sm font-semibold flex items-center gap-2">${escapeHtml(label)}</h3>
+                <p class="text-gray-300 text-xs leading-relaxed mt-1" style="white-space: break-spaces;text-align: justify;">${escapeHtml(content)}</p>
             </div>`;
     }).join('');
 
@@ -304,7 +304,7 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
                     <div style="filter: drop-shadow(0 10px 15px rgba(0, 0, 0, 0.8));">            
                         <!-- Div Principal com o recorte de trapézio -->
                         <div style="clip-path: polygon(0 0, 100% 0, 85% 100%, 15% 100%); margin-top: -1px; background-color: ${predominantColor.color100};; display: flex; align-items: center; justify-content: center; color: white;">
-                            <h3>${spellData.name}</h3>
+                            <h3>${escapeHtml(spellData.name || '')}</h3>
                         </div>                    
                     </div>
                 
@@ -346,7 +346,7 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
             });
             return `
                 <div class="spell-carousel-slide${index === 0 ? ' active' : ''}" data-slide-index="${index}">
-                    <div class="spell-carousel-label">${relation.label}</div>
+                    <div class="spell-carousel-label">${escapeHtml(relation.label)}</div>
                     ${cardHtml}
                 </div>
             `;
@@ -363,7 +363,7 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
                 </div>
                 ${inlineLayout ? '' : '<button type="button" class="spell-carousel-nav next" aria-label="Proximo card"><i class="fas fa-chevron-right"></i></button>'}
                 ${inlineLayout ? '' : `<div class="spell-carousel-dots">
-                    ${relatedCards.map((relation, index) => `<button type="button" class="spell-carousel-dot${index === 0 ? ' active' : ''}" data-slide-index="${index}" aria-label="${relation.label}"></button>`).join('')}
+                    ${relatedCards.map((relation, index) => `<button type="button" class="spell-carousel-dot${index === 0 ? ' active' : ''}" data-slide-index="${index}" aria-label="${escapeHtml(relation.label)}"></button>`).join('')}
                 </div>`}
             </div>
         `;

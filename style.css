@@ -3602,3 +3602,18 @@ body:not(.dark) .text-white { color: var(--text-color) !important; }
         flex: 0 0 auto !important;
     }
 }
+
+
+ .icone-entalhado i {
+            font-size: 70px;
+            /* O ícone precisa ter exatamente a mesma cor do fundo */
+            color: #e0e5ec; 
+            
+            /* A sombra cria o relevo:
+               Luz no topo/esquerda (-2px -2px) e Sombra na base/direita (2px 2px) */
+            text-shadow:
+                -2px -2px 5px #ffffff,
+                 2px  2px 5px #a3b1c6;
+                 
+            transition: color 0.3s ease, text-shadow 0.3s ease;
+        }

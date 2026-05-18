@@ -92,6 +92,43 @@ function getCollectionBaseCards(cards) {
     });
 }
 
+function normalizeRelatedCardRole(card) {
+    return card?.cardVariant === 'enhance' || card?.cardVariant === 'true' ? card.cardVariant : 'base';
+}
+
+async function getCollectionBaseCardsForStore(cards, storeName) {
+    const selectedCards = (cards || []).filter(Boolean);
+    if (!selectedCards.length) return [];
+
+    const allCards = ((await getData(storeName)) || []).filter(Boolean);
+    const cardsById = new Map(allCards.map(card => [String(card.id), card]));
+    const selectedById = new Map(selectedCards.map(card => [String(card.id), card]));
+    const baseCards = [];
+    const seenBaseIds = new Set();
+
+    selectedCards.forEach(card => {
+        let baseCard = card;
+        const role = normalizeRelatedCardRole(card);
+
+        if (role !== 'base' && card.baseCardId) {
+            baseCard = cardsById.get(String(card.baseCardId)) || card;
+        } else {
+            const parent = allCards.find(candidate =>
+                String(candidate?.enhanceCardId || '') === String(card.id) ||
+                String(candidate?.trueCardId || '') === String(card.id)
+            );
+            if (parent) baseCard = parent;
+        }
+
+        const baseId = String(baseCard?.id || card?.id || '');
+        if (!baseId || seenBaseIds.has(baseId)) return;
+        seenBaseIds.add(baseId);
+        baseCards.push(selectedById.get(baseId) || baseCard);
+    });
+
+    return getCollectionBaseCards(baseCards);
+}
+
 function clamp(value, min, max) {
     return Math.min(max, Math.max(min, value));
 }
@@ -525,7 +562,7 @@ async function populateInventory(container, characterData, uniqueId) {
     let inventoryHtml = `<div><h4 class="font-bold text-amber-300 border-b border-amber-300/30 pb-1 mb-2 px-2">Inventário</h4>`;
     if (characterData.items && characterData.items.length > 0) {
         const itemPromises = characterData.items.map(id => getData('rpgItems', id));
-        const items = getCollectionBaseCards((await Promise.all(itemPromises)).filter(Boolean));
+        const items = await getCollectionBaseCardsForStore((await Promise.all(itemPromises)).filter(Boolean), 'rpgItems');
         if (items.length > 0) {
             inventoryHtml += '<div class="grid grid-cols-2 gap-x-4 gap-y-1 px-2">';
             items.forEach(item => {
@@ -536,10 +573,11 @@ async function populateInventory(container, characterData, uniqueId) {
                 } else {
                     iconHtml = `<i class="fas fa-box w-5 text-center text-gray-400"></i>`;
                 }
+                const itemName = escapeHtml(item.name || 'Item');
                 inventoryHtml += `
-                    <div class="text-xs p-1 rounded hover:bg-white/10 cursor-pointer flex items-center gap-2 truncate" data-id="${item.id}" data-type="item" title="${item.name}">
+                    <div class="text-xs p-1 rounded hover:bg-white/10 cursor-pointer flex items-center gap-2 truncate" data-id="${escapeHtml(item.id)}" data-type="item" title="${itemName}">
                         ${iconHtml}
-                        <span class="truncate">${item.name}</span>
+                        <span class="truncate">${itemName}</span>
                     </div>`;
             });
             inventoryHtml += '</div>';
@@ -556,7 +594,7 @@ async function populateInventory(container, characterData, uniqueId) {
 
     if (characterData.spells && characterData.spells.length > 0) {
         const magicPromises = characterData.spells.map(id => getData('rpgEffects', id));
-        const magicsAndSkills = getCollectionBaseCards((await Promise.all(magicPromises)).filter(Boolean));
+        const magicsAndSkills = await getCollectionBaseCardsForStore((await Promise.all(magicPromises)).filter(Boolean), 'rpgEffects');
 
         const spells = magicsAndSkills.filter(ms => ms.type === 'magia' || !ms.type);
         const skills = magicsAndSkills.filter(ms => ms.type === 'habilidade');
@@ -572,10 +610,11 @@ async function populateInventory(container, characterData, uniqueId) {
                 } else {
                     iconHtml = `<i class="fas fa-magic w-5 text-center text-gray-400"></i>`;
                 }
+                const magicName = escapeHtml(magic.name || 'Magia');
                 magicsHtml += `
-                    <div class="text-xs p-1 rounded hover:bg-white/10 cursor-pointer flex items-center gap-2 truncate" data-id="${magic.id}" data-type="spell" title="${magic.name}">
+                    <div class="text-xs p-1 rounded hover:bg-white/10 cursor-pointer flex items-center gap-2 truncate" data-id="${escapeHtml(magic.id)}" data-type="spell" title="${magicName}">
                         ${iconHtml}
-                        <span class="truncate">${magic.name}</span>
+                        <span class="truncate">${magicName}</span>
                     </div>`;
             });
             magicsHtml += '</div>';
@@ -595,10 +634,11 @@ async function populateInventory(container, characterData, uniqueId) {
                 } else {
                     iconHtml = `<i class="fas fa-fist-raised w-5 text-center text-gray-400"></i>`;
                 }
+                const skillName = escapeHtml(skill.name || 'Habilidade');
                 skillsHtml += `
-                    <div class="text-xs p-1 rounded hover:bg-white/10 cursor-pointer flex items-center gap-2 truncate" data-id="${skill.id}" data-type="spell" title="${skill.name}">
+                    <div class="text-xs p-1 rounded hover:bg-white/10 cursor-pointer flex items-center gap-2 truncate" data-id="${escapeHtml(skill.id)}" data-type="spell" title="${skillName}">
                         ${iconHtml}
-                        <span class="truncate">${skill.name}</span>
+                        <span class="truncate">${skillName}</span>
                     </div>`;
             });
             skillsHtml += '</div>';
@@ -615,7 +655,7 @@ async function populateInventory(container, characterData, uniqueId) {
     let attacksHtml = '';
     if (characterData.attacks && characterData.attacks.length > 0) {
         const attackPromises = characterData.attacks.map(id => getData('rpgEffects', id));
-        const attacks = getCollectionBaseCards((await Promise.all(attackPromises)).filter(Boolean));
+        const attacks = await getCollectionBaseCardsForStore((await Promise.all(attackPromises)).filter(Boolean), 'rpgEffects');
 
         attacksHtml = `<div><h4 class="font-bold text-red-400 border-b border-red-400/30 pb-1 mb-2 px-2">Ataques</h4>`;
         if (attacks.length > 0) {
@@ -628,10 +668,11 @@ async function populateInventory(container, characterData, uniqueId) {
                 } else {
                     iconHtml = `<i class="fas fa-khanda w-5 text-center text-gray-400"></i>`;
                 }
+                const attackName = escapeHtml(attack.name || 'Ataque');
                 attacksHtml += `
-                    <div class="text-xs p-1 rounded hover:bg-white/10 cursor-pointer flex items-center gap-2 truncate" data-id="${attack.id}" data-type="attack" title="${attack.name}">
+                    <div class="text-xs p-1 rounded hover:bg-white/10 cursor-pointer flex items-center gap-2 truncate" data-id="${escapeHtml(attack.id)}" data-type="attack" title="${attackName}">
                         ${iconHtml}
-                        <span class="truncate">${attack.name}</span>
+                        <span class="truncate">${attackName}</span>
                     </div>`;
             });
             attacksHtml += '</div>';
@@ -679,9 +720,9 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
     const inventoryItems = !isCreature && characterData.items ? (await Promise.all(characterData.items.map(id => getData('rpgItems', id)))).filter(Boolean) : [];
     const magicItems = !isCreature && characterData.spells ? (await Promise.all(characterData.spells.map(id => getData('rpgEffects', id)))).filter(Boolean) : [];
     const attackItems = !isCreature && characterData.attacks ? (await Promise.all(characterData.attacks.map(id => getData('rpgEffects', id)))).filter(Boolean) : [];
-    const collectionInventoryItems = getCollectionBaseCards(inventoryItems);
-    const collectionMagicItems = getCollectionBaseCards(magicItems);
-    const collectionAttackItems = getCollectionBaseCards(attackItems);
+    const collectionInventoryItems = await getCollectionBaseCardsForStore(inventoryItems, 'rpgItems');
+    const collectionMagicItems = await getCollectionBaseCardsForStore(magicItems, 'rpgEffects');
+    const collectionAttackItems = await getCollectionBaseCardsForStore(attackItems, 'rpgEffects');
     
     const { totalFixedBonuses, bonusSources } = calculateBonuses(characterData, inventoryItems, magicItems);
 
@@ -748,7 +789,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
             const periciasList = groupedPericias[attribute].sort((a,b) => a.name.localeCompare(b.name)).map(p => {
                 const total = (parseInt(p.base) || 0) + (parseInt(p.bonus) || 0);
                 const valHtml = formatTotal(total, (parseInt(p.bonus) || 0) !== 0);
-                return `<span class="text-xs text-gray-300">${p.name} ${valHtml};</span>`;
+                return `<span class="text-xs text-gray-300">${escapeHtml(p.name)} ${valHtml};</span>`;
             }).join(' ');
             return `<div class="text-left mt-1"><p class="text-xs font-bold text-gray-200 uppercase" style="font-size: 11px;">${attribute}</p><div class="flex flex-wrap gap-x-2 gap-y-1 mb-1">${periciasList}</div></div>`;
         }).join('');
@@ -957,9 +998,9 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
 
     const hasLore = !isCreature && characterData.lore && (characterData.lore.historia || characterData.lore.personalidade || characterData.lore.motivacao);
     
-    const loreHistoriaHtml = characterData.lore?.historia ? `<h4>História</h4><p class="mb-4">${characterData.lore.historia}</p>` : '';
-    const lorePersonalidadeHtml = characterData.lore?.personalidade ? `<h4>Personalidade</h4><p class="mb-4">${characterData.lore.personalidade}</p>` : '';
-    const loreMotivacaoHtml = characterData.lore?.motivacao ? `<h4>Motivação</h4><p>${characterData.lore.motivacao}</p>` : '';
+    const loreHistoriaHtml = characterData.lore?.historia ? `<h4>História</h4><p class="mb-4">${escapeHtml(characterData.lore.historia)}</p>` : '';
+    const lorePersonalidadeHtml = characterData.lore?.personalidade ? `<h4>Personalidade</h4><p class="mb-4">${escapeHtml(characterData.lore.personalidade)}</p>` : '';
+    const loreMotivacaoHtml = characterData.lore?.motivacao ? `<h4>Motivação</h4><p>${escapeHtml(characterData.lore.motivacao)}</p>` : '';
 
     const loreModalHtml = hasLore
         ? `
@@ -1135,8 +1176,8 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
                     </div>
                 </div>
                 <div id="lore-icon-${uniqueId}" class="absolute top-8 left-1/2 -translate-x-1/2 text-center z-10"  data-action="toggle-lore">
-                    <h3 class="text-2xl font-bold">${characterData.title}</h3>
-                    <p class="text-md italic text-gray-300">${characterData.subTitle}</p>
+                    <h3 class="text-2xl font-bold">${escapeHtml(characterData.title || '')}</h3>
+                    <p class="text-md italic text-gray-300">${escapeHtml(characterData.subTitle || '')}</p>
                 </div>
                 ${loreModalHtml}
                 ${periciaModalHtml}
@@ -1700,7 +1741,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
             const valueHtml = formatTotal(total, hasPericiaBonus);
             const contentHtml = `
                     <div class="attribute-pericia-card__top">
-                        <h4>${pericia.name}</h4>
+                        <h4>${escapeHtml(pericia.name)}</h4>
                         <span>${valueHtml}</span>
                     </div>
             `;

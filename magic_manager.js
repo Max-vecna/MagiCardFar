@@ -67,6 +67,43 @@ function normalizeCardRole(role) {
     return role === 'enhance' || role === 'true' ? role : 'base';
 }
 
+function getCanonicalEffectBaseId(effectData, role, baseCardId, allEffects = []) {
+    const normalizedRole = normalizeCardRole(role || effectData?.cardVariant);
+    if (!effectData?.id) return '';
+    if (normalizedRole === 'base') return effectData.id;
+    if (baseCardId || effectData.baseCardId) return baseCardId || effectData.baseCardId;
+
+    const parent = (allEffects || []).find(effect =>
+        String(effect?.enhanceCardId || '') === String(effectData.id) ||
+        String(effect?.trueCardId || '') === String(effectData.id)
+    );
+
+    return parent?.id || effectData.id;
+}
+
+async function addCardToCharacterCollection(characterId, collectionKey, cardId) {
+    if (!characterId || !cardId) return false;
+
+    const character = await getData('rpgCards', characterId);
+    if (!character || character.cardType === 'creature') return false;
+
+    const currentIds = Array.isArray(character[collectionKey]) ? character[collectionKey].map(String) : [];
+    if (currentIds.includes(String(cardId))) return false;
+
+    character[collectionKey] = [...currentIds, String(cardId)];
+    await saveData('rpgCards', character);
+    return true;
+}
+
+async function syncEffectOwnerToCharacter(effectData, role, baseCardId, allEffects = []) {
+    const ownerId = effectData?.characterId || '';
+    if (!ownerId) return false;
+
+    const effectId = getCanonicalEffectBaseId(effectData, role, baseCardId, allEffects);
+    const collectionKey = effectData?.type === 'ataque' ? 'attacks' : 'spells';
+    return addCardToCharacterCollection(ownerId, collectionKey, effectId);
+}
+
 function getCardDisplayName(card) {
     return card?.name || card?.title || 'Card sem nome';
 }
@@ -1251,6 +1288,7 @@ export async function saveSpellCard(spellForm, type) {
     }
 
     await saveData('rpgEffects', spellData);
+    let characterRelationChanged = await syncEffectOwnerToCharacter(spellData, cardVariant, baseCardId, allEffects);
     if (cardVariant === 'base') {
         await unlinkRemovedBaseEffectRelations(
             spellData.id,
@@ -1273,6 +1311,7 @@ export async function saveSpellCard(spellForm, type) {
                 : { color30: 'rgba(13, 148, 136, 0.3)', color100: 'rgb(13, 148, 136)' });
             await saveData('rpgEffects', relatedDraft);
             await syncBaseEffectRelation(relatedDraft, role, spellData.id);
+            characterRelationChanged = await syncEffectOwnerToCharacter(relatedDraft, role, spellData.id, allEffects) || characterRelationChanged;
         }
     }
 
@@ -1283,10 +1322,14 @@ export async function saveSpellCard(spellForm, type) {
             : { color30: 'rgba(13, 148, 136, 0.3)', color100: 'rgb(13, 148, 136)' });
         await saveData('rpgEffects', relatedSpellData);
         await syncBaseEffectRelation(relatedSpellData, payload.role, spellData.id);
+        characterRelationChanged = await syncEffectOwnerToCharacter(relatedSpellData, payload.role, spellData.id, allEffects) || characterRelationChanged;
     }
 
     const eventType = type === 'habilidade' ? 'habilidades' : (type === 'ataque' ? 'ataques' : 'magias');
     document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: eventType } }));
+    if (characterRelationChanged) {
+        document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: 'personagem' } }));
+    }
 
     if (relatedCreationContext) {
         await restoreBaseSpellDraft(spellData.id);

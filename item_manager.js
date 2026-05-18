@@ -43,6 +43,42 @@ function normalizeItemRole(role) {
     return role === 'enhance' || role === 'true' ? role : 'base';
 }
 
+function getCanonicalItemBaseId(itemData, role, baseCardId, allItems = []) {
+    const normalizedRole = normalizeItemRole(role || itemData?.cardVariant);
+    if (!itemData?.id) return '';
+    if (normalizedRole === 'base') return itemData.id;
+    if (baseCardId || itemData.baseCardId) return baseCardId || itemData.baseCardId;
+
+    const parent = (allItems || []).find(item =>
+        String(item?.enhanceCardId || '') === String(itemData.id) ||
+        String(item?.trueCardId || '') === String(itemData.id)
+    );
+
+    return parent?.id || itemData.id;
+}
+
+async function addCardToCharacterCollection(characterId, collectionKey, cardId) {
+    if (!characterId || !cardId) return false;
+
+    const character = await getData('rpgCards', characterId);
+    if (!character || character.cardType === 'creature') return false;
+
+    const currentIds = Array.isArray(character[collectionKey]) ? character[collectionKey].map(String) : [];
+    if (currentIds.includes(String(cardId))) return false;
+
+    character[collectionKey] = [...currentIds, String(cardId)];
+    await saveData('rpgCards', character);
+    return true;
+}
+
+async function syncItemOwnerToCharacter(itemData, role, baseCardId, allItems = []) {
+    const ownerId = itemData?.characterId || '';
+    if (!ownerId) return false;
+
+    const itemId = getCanonicalItemBaseId(itemData, role, baseCardId, allItems);
+    return addCardToCharacterCollection(ownerId, 'items', itemId);
+}
+
 function getItemDisplayName(item) {
     return item?.name || item?.title || 'Item sem nome';
 }
@@ -1187,6 +1223,7 @@ export async function saveItemCard(itemForm) {
     }
 
     await saveData('rpgItems', itemData);
+    let characterRelationChanged = await syncItemOwnerToCharacter(itemData, cardVariant, baseCardId, allItems);
     if (cardVariant === 'base') {
         await unlinkRemovedBaseItemRelations(
             itemData.id,
@@ -1207,6 +1244,7 @@ export async function saveItemCard(itemForm) {
             relatedDraft.predominantColor = await calculateColorUtil(relatedDraft.image, relatedDraft.imageMimeType, { color30: 'rgba(217, 119, 6, 0.3)', color100: 'rgb(217, 119, 6)' });
             await saveData('rpgItems', relatedDraft);
             await syncBaseItemRelation(relatedDraft, role, itemData.id);
+            characterRelationChanged = await syncItemOwnerToCharacter(relatedDraft, role, itemData.id, allItems) || characterRelationChanged;
         }
     }
 
@@ -1215,9 +1253,13 @@ export async function saveItemCard(itemForm) {
         relatedItemData.predominantColor = await calculateColorUtil(relatedItemData.image, relatedItemData.imageMimeType, { color30: 'rgba(217, 119, 6, 0.3)', color100: 'rgb(217, 119, 6)' });
         await saveData('rpgItems', relatedItemData);
         await syncBaseItemRelation(relatedItemData, payload.role, itemData.id);
+        characterRelationChanged = await syncItemOwnerToCharacter(relatedItemData, payload.role, itemData.id, allItems) || characterRelationChanged;
     }
 
     document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: 'itens' } }));
+    if (characterRelationChanged) {
+        document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: 'personagem' } }));
+    }
 
     resetItemFormState();
     return { keepOpen: false };

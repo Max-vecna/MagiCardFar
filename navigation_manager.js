@@ -65,16 +65,13 @@ function buildRelatedCardIdSets(items) {
     return { enhanceIds, trueIds };
 }
 
-function getGridBaseCards(items) {
-    const { enhanceIds, trueIds } = buildRelatedCardIdSets(items);
-    const existingIds = new Set(items.map(item => item?.id).filter(Boolean));
+function getGridBaseCards(items, referenceItems = items) {
+    const { enhanceIds, trueIds } = buildRelatedCardIdSets(referenceItems);
 
     return items.filter(item => {
         if (!item?.id) return false;
         if (enhanceIds.has(item.id) || trueIds.has(item.id)) return false;
-        if ((item.cardVariant === 'enhance' || item.cardVariant === 'true') && item.baseCardId && existingIds.has(item.baseCardId)) {
-            return false;
-        }
+        if (item.cardVariant === 'enhance' || item.cardVariant === 'true') return false;
         return true;
     });
 }
@@ -716,6 +713,7 @@ export async function openSelectionModal(type) {
     const renderList = async (characterId) => {
         listContainer.innerHTML = '<div class="text-center p-4"><i class="fas fa-spinner fa-spin text-2xl text-gray-400"></i></div>';
         let data = await getData(storeName);
+        let referenceData = Array.isArray(data) ? data.slice() : [];
 
         // Identificar IDs já selecionados no formulário
         const selectedIds = new Set();
@@ -740,17 +738,25 @@ export async function openSelectionModal(type) {
             if (data && Array.isArray(data)) {
                 data = data.filter(c => c.cardType === 'creature');
             }
-        } else if (characterId && characterId !== 'all') {
-            data = data.filter(item => item.characterId === characterId);
         }
 
         // Filtragem por tipo quando usamos o store unificado
         if (storeName === 'rpgEffects') {
             if (type === 'magic') {
                 data = data.filter(item => item.type === 'magia' || item.type === 'habilidade');
+                referenceData = referenceData.filter(item => item.type === 'magia' || item.type === 'habilidade');
             } else if (type === 'attack') {
                 data = data.filter(item => item.type === 'ataque');
+                referenceData = referenceData.filter(item => item.type === 'ataque');
             }
+        }
+
+        if (type !== 'relationship' && characterId && characterId !== 'all') {
+            data = data.filter(item => item.characterId === characterId);
+        }
+
+        if (type !== 'relationship') {
+            data = getGridBaseCards(data, referenceData);
         }
         
         listContainer.innerHTML = '';

@@ -16,7 +16,7 @@ let isDriveLoaded = false;
 
 const DB_CONFIG = {
     name: 'RPGCardsDB',
-    version: 2,
+    version: 3,
     stores: {
         rpgCards: { keyPath: 'id' },
         rpgSpells: { keyPath: 'id' },
@@ -224,6 +224,49 @@ function normalizeStoreRecord(storeName, record) {
         ...record,
         aumentos: normalizeAumentos(record.aumentos)
     };
+}
+
+function createConfiguredStores(database) {
+    Object.entries(DB_CONFIG.stores).forEach(([storeName, storeConfig]) => {
+        if (!database.objectStoreNames.contains(storeName)) {
+            database.createObjectStore(storeName, storeConfig);
+        }
+    });
+}
+
+function getMissingConfiguredStores(database) {
+    return Object.keys(DB_CONFIG.stores)
+        .filter(storeName => !database.objectStoreNames.contains(storeName));
+}
+
+function openConfiguredDatabase(version) {
+    return new Promise((resolve, reject) => {
+        const request = Number.isFinite(Number(version))
+            ? indexedDB.open(DB_CONFIG.name, Number(version))
+            : indexedDB.open(DB_CONFIG.name);
+        request.onerror = () => reject(request.error || new Error('IndexedDB indisponivel.'));
+        request.onsuccess = () => resolve(request.result);
+        request.onupgradeneeded = (event) => {
+            createConfiguredStores(event.target.result);
+        };
+    });
+}
+
+async function openConfiguredDatabaseWithRepair() {
+    let database;
+    try {
+        database = await openConfiguredDatabase(DB_CONFIG.version);
+    } catch (error) {
+        if (error?.name !== 'VersionError') throw error;
+        database = await openConfiguredDatabase();
+    }
+
+    const missingStores = getMissingConfiguredStores(database);
+    if (!missingStores.length) return database;
+
+    const repairVersion = Math.max(Number(database.version || 0) + 1, DB_CONFIG.version + 1);
+    database.close();
+    return openConfiguredDatabase(repairVersion);
 }
 
 async function migrateEffectsStoreIfNeeded() {
@@ -512,25 +555,29 @@ async function restoreDataFromJSON(jsonData) {
 
 // --- Inicialização do Banco de Dados ---
 export async function openDatabase() {
-    // 1. Inicia o IndexedDB Local (Rápido)
-    await new Promise((resolve, reject) => {
-        const request = indexedDB.open(DB_CONFIG.name, DB_CONFIG.version);
-        request.onerror = (e) => reject(e.target.errorCode);
-        request.onsuccess = (e) => {
-            db = e.target.result;
-            createProgressModal();
-            resolve(db);
-        };
-        request.onupgradeneeded = (e) => {
-            db = e.target.result;
-            Object.keys(DB_CONFIG.stores).forEach(storeName => {
-                if (!db.objectStoreNames.contains(storeName)) {
-                    db.createObjectStore(storeName, DB_CONFIG.stores[storeName]);
-                }
-            });
-        };
+    db = await openConfiguredDatabaseWithRepair();
+    createProgressModal();
+
+    await migrateEffectsStoreIfNeeded();
+
+    initDrive().then(() => {
+        console.log("Drive API Initialized");
     });
 
+    document.addEventListener('driveLoginSuccess', async () => {
+        showTopAlert('Conectado ao Drive. Use os botoes para Salvar/Carregar.', 3000, 'info');
+    });
+
+    window.addEventListener('offline', () => {
+        showTopAlert("Voce esta offline.", 3000, "error");
+    });
+    window.addEventListener('online', () => {
+        showTopAlert("Conexao restaurada.", 3000, "success");
+    });
+
+    return db;
+
+    // 1. Inicia o IndexedDB Local (Rápido)
     await migrateEffectsStoreIfNeeded();
 
     // 2. Inicializa o Drive em segundo plano
@@ -700,6 +747,7 @@ export async function manualLoadFromDrive() {
 export function saveData(storeName, data) {
     return new Promise((resolve, reject) => {
         if (!db) return reject("Database not open.");
+        if (!db.objectStoreNames.contains(storeName)) return reject(new Error(`Object store ausente: ${storeName}`));
         
         const transaction = db.transaction([storeName], 'readwrite');
         const store = transaction.objectStore(storeName);
@@ -716,6 +764,11 @@ export function saveData(storeName, data) {
 export function getData(storeName, key) {
     return new Promise((resolve, reject) => {
         if (!db) return reject("Database not open.");
+        if (!db.objectStoreNames.contains(storeName)) {
+            console.warn(`Object store ausente: ${storeName}`);
+            resolve(key ? null : []);
+            return;
+        }
         const transaction = db.transaction([storeName], 'readonly');
         const store = transaction.objectStore(storeName);
         const request = key ? store.get(key) : store.getAll();
@@ -737,6 +790,7 @@ export function getData(storeName, key) {
 export function removeData(storeName, key) {
     return new Promise((resolve, reject) => {
         if (!db) return reject("Database not open.");
+        if (!db.objectStoreNames.contains(storeName)) return reject(new Error(`Object store ausente: ${storeName}`));
         const transaction = db.transaction([storeName], 'readwrite');
         const store = transaction.objectStore(storeName);
         const request = store.delete(key);

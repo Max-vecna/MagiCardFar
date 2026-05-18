@@ -223,7 +223,7 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
                 <h3 class="text-sm font-semibold flex items-center gap-2">Detalhes</h3>
                 <div class="text-gray-300 text-xs leading-relaxed mt-1 pl-6 space-y-1">
                     <ul class="list-disc list-inside">
-                        ${details.map(d => `<li><span class="font-semibold">${d.label}:</span> ${d.value}</li>`).join('')}
+                        ${details.map(d => `<li><span class="font-semibold">${escapeHtml(d.label)}:</span> ${escapeHtml(d.value)}</li>`).join('')}
                     </ul>
                 </div>
             </div>
@@ -255,8 +255,8 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
         const aumentosFixos = itemData.aumentos.filter(a => (a?.tipo || 'fixo') === 'fixo');
         const createList = (list, title, color) => {
             if (list.length === 0) return '';
-            const items = list.map(a => `<li><span class="font-semibold">${a.nome}:</span> ${a.valor > 0 ? '+' : ''}${a.valor}</li>`).join('');
-            return `<div class="mb-2"><h5 class="font-bold text-sm ${color}">${title}</h5><ul class="list-disc list-inside text-xs">${items}</ul></div>`;
+            const items = list.map(a => `<li><span class="font-semibold">${escapeHtml(a.nome)}:</span> ${a.valor > 0 ? '+' : ''}${escapeHtml(a.valor)}</li>`).join('');
+            return `<div class="mb-2"><h5 class="font-bold text-sm ${color}">${escapeHtml(title)}</h5><ul class="list-disc list-inside text-xs">${items}</ul></div>`;
         };
         
         aumentosHtml = `
@@ -278,7 +278,7 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
             </div>
             
             <div class="w-full text-left absolute top-0 line-top" style="background-color: ${predominantColor.color30}; padding-top: 20px; padding-bottom: 10px; text-align: center; --minha-cor: ${predominantColor.color100};">
-                <h3 class="font-bold tracking-tight text-white" style="font-size: 1.3rem">${itemData.name}</h3>
+                <h3 class="font-bold tracking-tight text-white" style="font-size: 1.3rem">${escapeHtml(itemData.name || '')}</h3>
             </div>
 
             ${diceStatsHtml}
@@ -293,8 +293,8 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
                             { label: 'Verdadeiro', value: itemData.true, hidden: Boolean(itemData.trueCardId) }
                         ].filter(section => section.value && !section.hidden).map(section => `
                             <div class="pt-2">
-                                <h3 class="text-sm font-semibold flex items-center gap-2">${section.label}</h3>
-                                <p class="text-gray-300 text-xs leading-relaxed mt-1 pl-6" style="white-space:pre-line;">${section.value}</p>
+                                <h3 class="text-sm font-semibold flex items-center gap-2">${escapeHtml(section.label)}</h3>
+                                <p class="text-gray-300 text-xs leading-relaxed mt-1 pl-6" style="white-space:pre-line;">${escapeHtml(section.value)}</p>
                             </div>
                         `).join('')}
                     </div>
@@ -323,7 +323,7 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
 
             return `
                 <div class="spell-carousel-slide${index === 0 ? ' active' : ''}" data-slide-index="${index}">
-                    <div class="spell-carousel-label">${relation.label}</div>
+                    <div class="spell-carousel-label">${escapeHtml(relation.label)}</div>
                     ${cardHtml}
                 </div>
             `;
@@ -340,7 +340,7 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
                 </div>
                 ${inlineLayout ? '' : '<button type="button" class="spell-carousel-nav next" aria-label="Proximo card"><i class="fas fa-chevron-right"></i></button>'}
                 ${inlineLayout ? '' : `<div class="spell-carousel-dots">
-                    ${relatedCards.map((relation, index) => `<button type="button" class="spell-carousel-dot${index === 0 ? ' active' : ''}" data-slide-index="${index}" aria-label="${relation.label}"></button>`).join('')}
+                    ${relatedCards.map((relation, index) => `<button type="button" class="spell-carousel-dot${index === 0 ? ' active' : ''}" data-slide-index="${index}" aria-label="${escapeHtml(relation.label)}"></button>`).join('')}
                 </div>`}
             </div>
         `;
