@@ -1,4 +1,5 @@
 import { bufferToBlob } from './ui_utils.js';
+import { hasArenaModel, renderArenaModelSheet } from './arena_model_renderer.js';
 
 async function getRelatedSpellCards(spellData) {
     const { getData } = await import('./local_db.js');
@@ -178,6 +179,13 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
     const sheetContainer = document.getElementById('spell-sheet-container');
     if (!sheetContainer) return;
 
+    if (hasArenaModel(spellData)) {
+        return renderArenaModelSheet(spellData, isModal, {
+            ...options,
+            containerId: 'spell-sheet-container'
+        });
+    }
+
     if(isModal) {  
         const index = document.getElementsByClassName('visible').length;
         sheetContainer.style.zIndex = 100000000 + index;
@@ -265,10 +273,10 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
         : '';
 
     const attackStatsHtml = renderSideDiceRail([
-        { key: 'acerto', label: 'ATK', icon: 'fa-dice-d20', value: spellData.acerto },
-        { key: 'critico', label: 'ATK s/Mana', icon: 'fa-crosshairs', value: spellData.critico },
-        { key: 'dano', label: 'DMG', icon: 'fa-fire', value: spellData.dano },
-        { key: 'danoSemMana', label: 'DMG s/Mana', icon: 'fa-skull', value: spellData.danoSemMana },
+        { key: 'acerto', label: 'Acerto', icon: 'fa-dice-d20', value: spellData.acerto },
+        { key: 'critico', label: 'Acerto Critico', icon: 'fa-crosshairs', value: spellData.critico },
+        { key: 'dano', label: 'ATK', icon: 'fa-fire', value: spellData.dano },
+        { key: 'danoSemMana', label: 'ATK s/Mana', icon: 'fa-skull', value: spellData.danoSemMana },
         { key: 'vidaDado', label: 'PV', icon: 'fa-heart', value: spellData.vidaDado },
         { key: 'manaDado', label: 'PM', icon: 'fa-fire', value: spellData.manaDado }
     ], predominantColor);

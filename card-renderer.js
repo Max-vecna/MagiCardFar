@@ -2,6 +2,7 @@ import { getData, saveData } from './local_db.js';
 import { renderFullItemSheet } from './item_renderer.js';
 import { renderFullSpellSheet } from './magic_renderer.js';
 import { renderFullAttackSheet } from './attack_renderer.js';
+import { hasArenaModel, renderArenaModelSheet } from './arena_model_renderer.js';
 import { bufferToBlob, showCustomAlert } from './ui_utils.js'; // Importando de ui_utils
 
 const PERICIAS_DATA = {
@@ -23,8 +24,8 @@ for (const attribute in PERICIAS_DATA) {
 const ATTRIBUTE_KEY_TO_GROUP = {
     agilidade: 'AGILIDADE',
     carisma: 'CARISMA',
-    forca: 'FORÃ‡A',
-    inteligencia: 'INTELIGÃŠNCIA',
+    forca: 'FORÇA',
+    inteligencia: 'INTELIGÊNCIA',
     sabedoria: 'SABEDORIA',
     vigor: 'VIGOR'
 };
@@ -42,8 +43,29 @@ function normalizeKey(name) {
     return (name || '').toLowerCase().trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
-// Converte valores como "4+1" em número (5) e sinaliza que havia bônus.
-// Se não for um formato simples, retorna null.
+function getCustomPericiasForRenderer() {
+    try {
+        const custom = JSON.parse(localStorage.getItem('customPericias')) || {};
+        return custom && typeof custom === 'object' ? custom : {};
+    } catch (error) {
+        return {};
+    }
+}
+
+function getPericiaAttributeMap() {
+    const map = { ...periciaToAttributeMap };
+    const custom = getCustomPericiasForRenderer();
+    Object.entries(custom).forEach(([attribute, pericias]) => {
+        if (!pericias || typeof pericias !== 'object') return;
+        Object.keys(pericias).forEach(periciaName => {
+            map[periciaName] = attribute;
+        });
+    });
+    return map;
+}
+
+// Converte valores como "4+1" em nÃƒÆ’Ã‚Âºmero (5) e sinaliza que havia bÃƒÆ’Ã‚Â´nus.
+// Se nÃƒÆ’Ã‚Â£o for um formato simples, retorna null.
 function parseAdditiveString(value) {
     if (value === null || value === undefined) return { total: null, hasBonus: false };
     const s = String(value).replace(/\s+/g, '');
@@ -55,7 +77,7 @@ function parseAdditiveString(value) {
     return { total: a + b, hasBonus: b !== 0 };
 }
 
-// Formata um número total e aplica cor quando houve bônus.
+// Formata um nÃƒÆ’Ã‚Âºmero total e aplica cor quando houve bÃƒÆ’Ã‚Â´nus.
 function formatTotal(total, hasBonus, suffix = '') {
     if (total === null || total === undefined) return '-';
     const txt = `${total}${suffix}`;
@@ -331,9 +353,9 @@ export async function updateStatDisplay(sheetContainer, characterData) {
     if (dinheiroEl) dinheiroEl.textContent = characterData.dinheiro || 0;
     updateResourceVisibility('dinheiro', hasMoney);
     
-    // --- ATUALIZADO: Separação de Stats ---
-    // Definição das duas listas de stats para busca
-    const attackStats = { acerto: 'ATK', dano: 'DMG', critico: 'ATK s/Mana', danoSemMana: 'DMG s/Mana' };
+    // --- ATUALIZADO: SeparaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o de Stats ---
+    // DefiniÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o das duas listas de stats para busca
+    const attackStats = { acerto: 'Acerto', dano: 'ATK', critico: 'Acerto Critico', danoSemMana: 'ATK s/Mana' };
     const defenseStats = { armadura: 'CA', esquiva: 'ES', bloqueio: 'BL', deslocamento: 'DL' };
     
     // Busca elementos em AMBOS os containers (novo div-attack-stats e div-combat-stats existente)
@@ -351,7 +373,7 @@ export async function updateStatDisplay(sheetContainer, characterData) {
                 let content = baseValue;
                 let fixedBonusHtml = '';
 
-                // Bonus fixos apenas para stats numéricos de defesa/movimento
+                // Bonus fixos apenas para stats numÃƒÆ’Ã‚Â©ricos de defesa/movimento
                 if (['armadura', 'esquiva', 'bloqueio', 'deslocamento'].includes(stat)) {
                     const numVal = parseInt(baseValue) || 0;
                     const fixedBonus = totalFixedBonuses[stat] || 0;
@@ -359,15 +381,15 @@ export async function updateStatDisplay(sheetContainer, characterData) {
                     const total = numVal + fixedBonus;
                     content = formatTotal(total, fixedBonus !== 0, suffix);
                 } else {
-                    // Para Acerto e Dano (strings), se vier no formato "4+1" somamos e destacamos.
+                    // Para Acerto e ATK (strings), se vier no formato "4+1" somamos e destacamos.
                     const { total, hasBonus } = parseAdditiveString(baseValue);
                     content = (total !== null) ? formatTotal(total, hasBonus) : (baseValue || '-');
                 }
 
-                // Preserva a cor específica para ATK e DMG
+                // Preserva a cor especifica para Acerto e ATK
                 const colorStyle = stat === 'acerto' ? 'color: #facc15;' : (stat === 'dano' ? 'color: #f87171;' : '');
 
-                // Se houver estilo de cor, aplicamos no span do label, senão herda
+                // Se houver estilo de cor, aplicamos no span do label, senÃƒÆ’Ã‚Â£o herda
                 const labelHtml = colorStyle ? `<span style="${colorStyle}">${label}</span>` : label;
 
                 el.innerHTML = `${labelHtml}<br>${content}${fixedBonusHtml}`;
@@ -410,8 +432,8 @@ export async function updateStatDisplay(sheetContainer, characterData) {
     });
 }
 
-// Substitua a função setupStatEditor inteira por esta:
-// Substitua a função setupStatEditor inteira por esta versão robusta:
+// Substitua a funÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o setupStatEditor inteira por esta:
+// Substitua a funÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o setupStatEditor inteira por esta versÃƒÆ’Ã‚Â£o robusta:
 
 function setupStatEditor(characterData, container) {
     const sheetContainer = container || document.querySelector('#nested-sheet-container.visible') || document.querySelector('#character-sheet-container.visible');
@@ -424,7 +446,7 @@ function setupStatEditor(characterData, container) {
     const iconEl = modal.querySelector('#stat-editor-icon');
     const inputEl = modal.querySelector('#stat-editor-value');
     
-    // Variáveis de estado locais para esta instância da ficha
+    // VariÃƒÆ’Ã‚Â¡veis de estado locais para esta instÃƒÆ’Ã‚Â¢ncia da ficha
     let currentStat = null;
     let statMax = Infinity;
 
@@ -439,8 +461,8 @@ function setupStatEditor(characterData, container) {
         setTimeout(() => modal.classList.add('hidden'), 300);
     };
 
-    // Função que configura os botões do modal para ESTE personagem especificamente
-    // Ela é chamada toda vez que abrimos o modal, para garantir que o modal "pertença" a esta ficha
+    // FunÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o que configura os botÃƒÆ’Ã‚Âµes do modal para ESTE personagem especificamente
+    // Ela ÃƒÆ’Ã‚Â© chamada toda vez que abrimos o modal, para garantir que o modal "pertenÃƒÆ’Ã‚Â§a" a esta ficha
     const configureModalButtons = () => {
         const addBtn = modal.querySelector('#stat-editor-add-btn');
         const subtractBtn = modal.querySelector('#stat-editor-subtract-btn');
@@ -455,7 +477,7 @@ function setupStatEditor(characterData, container) {
         subtractBtn.parentNode.replaceChild(newSubtractBtn, subtractBtn);
         closeBtn.parentNode.replaceChild(newCloseBtn, closeBtn);
 
-        // Lógica de Atualização (Closure capturando o characterData correto)
+        // LÃƒÆ’Ã‚Â³gica de AtualizaÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o (Closure capturando o characterData correto)
         const updateStat = (amount) => {
             if (!currentStat || isNaN(amount) || amount === 0) {
                 if (amount === 0) closeModal();
@@ -489,7 +511,7 @@ function setupStatEditor(characterData, container) {
             });
         };
 
-        // Adiciona os eventos nos botões recém-limpos
+        // Adiciona os eventos nos botÃƒÆ’Ã‚Âµes recÃƒÆ’Ã‚Â©m-limpos
         newAddBtn.addEventListener('click', () => updateStat(Math.abs(parseInt(inputEl.value, 10) || 0)));
         newSubtractBtn.addEventListener('click', () => updateStat(-Math.abs(parseInt(inputEl.value, 10) || 0)));
         newCloseBtn.addEventListener('click', closeModal);
@@ -521,9 +543,9 @@ function setupStatEditor(characterData, container) {
         setTimeout(() => modal.classList.add('visible'), 10);
     };
 
-    // Configuração dos gatilhos na ficha (Ícones de Vida/Mana/Dinheiro)
+    // ConfiguraÃƒÆ’Ã‚Â§ÃƒÆ’Ã‚Â£o dos gatilhos na ficha (ÃƒÆ’Ã‚Âcones de Vida/Mana/Dinheiro)
     sheetContainer.querySelectorAll('[data-action="edit-stat"]').forEach(el => {
-        // Limpa listeners antigos do ícone
+        // Limpa listeners antigos do ÃƒÆ’Ã‚Â­cone
         const newEl = el.cloneNode(true);
         el.parentNode.replaceChild(newEl, el);
         
@@ -532,9 +554,9 @@ function setupStatEditor(characterData, container) {
             const type = newEl.dataset.statType;
             const max = newEl.dataset.statMax ? parseInt(newEl.dataset.statMax, 10) : Infinity;
             
-            // --- PASSO CRÍTICO: Reconfigura os botões do modal AGORA ---
-            // Isso garante que os botões "Add/Subtract" obedeçam a ESTA ficha, 
-            // não importa quantos minicards foram abertos antes.
+            // --- PASSO CRÃƒÆ’Ã‚ÂTICO: Reconfigura os botÃƒÆ’Ã‚Âµes do modal AGORA ---
+            // Isso garante que os botÃƒÆ’Ã‚Âµes "Add/Subtract" obedeÃƒÆ’Ã‚Â§am a ESTA ficha, 
+            // nÃƒÆ’Ã‚Â£o importa quantos minicards foram abertos antes.
             configureModalButtons(); 
             // -----------------------------------------------------------
 
@@ -543,7 +565,7 @@ function setupStatEditor(characterData, container) {
     });
 
     // Listeners globais do modal (Fundo e ESC)
-    // Apenas definimos o onclick direto para evitar acúmulo de listeners globais
+    // Apenas definimos o onclick direto para evitar acÃƒÆ’Ã‚Âºmulo de listeners globais
     modal.onclick = (e) => {
         if (e.target === modal) closeModal();
     };
@@ -552,7 +574,7 @@ function setupStatEditor(characterData, container) {
     };
 }
 
-// Renderiza o inventário na ficha
+// Renderiza o inventÃƒÆ’Ã‚Â¡rio na ficha
 async function populateInventory(container, characterData, uniqueId) {
     const scrollArea = container.querySelector(`#inventory-magic-scroll-area-${uniqueId}`);
     if (!scrollArea) return;
@@ -711,6 +733,17 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
     const sheetContainer = staticHtmlOnly ? targetContainer : (targetContainer || document.getElementById('character-sheet-container'));
     if (!sheetContainer && !staticHtmlOnly && (isModal || isInPlay)) return '';
 
+    if (hasArenaModel(characterData)) {
+        const html = renderArenaModelSheet(characterData, isModal, {
+            ...renderOptions,
+            container: sheetContainer,
+            containerId: 'character-sheet-container'
+        });
+        if (staticHtmlOnly) return html;
+        if (!isModal && sheetContainer) sheetContainer.innerHTML = html;
+        return html;
+    }
+
     if (isModal) {
         const index = document.getElementsByClassName('visible').length;
         sheetContainer.style.zIndex = 1000 + index;
@@ -777,8 +810,9 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
     let groupedPericias = {};
 
     if (periciasForGrouping.length > 0) {
+        const fullPericiaToAttributeMap = getPericiaAttributeMap();
         groupedPericias = periciasForGrouping.reduce((acc, pericia) => {
-            const attribute = periciaToAttributeMap[pericia.name] || 'OUTRAS';
+            const attribute = fullPericiaToAttributeMap[pericia.name] || 'OUTRAS';
             if (!acc[attribute]) acc[attribute] = [];
             acc[attribute].push(pericia);
             return acc;
@@ -811,8 +845,8 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
         `).join('');
     };
 
-    // --- SEPARAÇÃO DOS STATS EM DOIS GRUPOS ---
-    const attackStats = { acerto: 'ATK', critico: 'ATK s/Mana', dano: 'DMG', danoSemMana: 'DMG s/Mana'};
+    // --- SEPARAÃƒÆ’Ã¢â‚¬Â¡ÃƒÆ’Ã†â€™O DOS STATS EM DOIS GRUPOS ---
+    const attackStats = { acerto: 'Acerto', critico: 'Acerto Critico', dano: 'ATK', danoSemMana: 'ATK s/Mana'};
     const defenseStats = { armadura: 'CA', esquiva: 'ES', bloqueio: 'BL', deslocamento: 'DL' };
 
     const hasAcerto = characterData.attributes.acerto && String(characterData.attributes.acerto).trim() !== '';
@@ -823,7 +857,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
     const showAttackStatsSem = hasAcertoSem || hasDanoSem;
    
 
-    // Gera HTML para Acerto e Dano (Novo Card)
+    // Gera HTML para Acerto e ATK (Novo Card)
     const attackStatsHtml = isCreature ? Object.entries(attackStats).map(([stat, label]) => 
     {
         const baseValue = characterData.attributes[stat] || 0;
@@ -871,7 +905,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
             return `<div class="text-center">${contentHtml}</div>`;
         }
 
-        // Fallback (não esperado aqui)
+        // Fallback (nÃƒÆ’Ã‚Â£o esperado aqui)
         const { total, hasBonus } = parseAdditiveString(baseValue);
         const content = (total !== null) ? formatTotal(total, hasBonus) : (baseValue || '-');
         return `<div class="text-center"><span>${label}</span><br>${content}</div>`;
@@ -1323,6 +1357,24 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
         scaleGroup('.related-character-grid-item', 'character-sheet-');
         scaleGroup('.related-spell-grid-item, .related-skill-grid-item, .related-attack-grid-item', 'spell-sheet-');
         scaleGroup('.related-item-grid-item', 'item-sheet-');
+
+        grid.querySelectorAll('.character-collection-mini-card').forEach(item => {
+            const sheet = item.querySelector('.arena-model-card');
+            if (!sheet) return;
+            const sheetWidth = sheet.clientWidth;
+            const sheetHeight = sheet.clientHeight;
+            const targetWidth = item.clientWidth;
+            if (sheetWidth <= 0 || sheetHeight <= 0 || targetWidth <= 0) return;
+            const scale = targetWidth / sheetWidth;
+            const scaledHeight = sheetHeight * scale;
+            const caption = item.querySelector('.character-collection-mini-card__caption');
+            const captionHeight = caption ? caption.offsetHeight + 8 : 0;
+            item.style.setProperty('--collection-card-scaled-height', `${scaledHeight}px`);
+            item.style.height = `${scaledHeight + captionHeight}px`;
+            item.style.position = 'relative';
+            sheet.style.transform = `scale(${scale})`;
+            sheet.style.transformOrigin = 'top left';
+        });
     };
 
     const ensureCollectionPanelRendered = async (collectionKey) => {
@@ -1364,7 +1416,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
             console.error('Erro ao renderizar mini cards da colecao:', error);
             panel.dataset.rendered = 'error';
             if (status) {
-                status.textContent = 'Nao foi possivel carregar estes mini cards.';
+                status.textContent = 'Não foi possível carregar estes mini cards.';
                 status.classList.remove('hidden');
             }
         }
@@ -1444,7 +1496,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
             }
         } catch (error) {
             console.error('Erro ao abrir card relacionado:', error);
-            showCustomAlert('Nao foi possivel abrir este card agora.');
+            showCustomAlert('Não foi possível abrir este card agora.');
         }
     };
 
@@ -1491,7 +1543,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
     });
 
    setTimeout(() => {
-     // --- LÓGICA DE AJUSTE DE ALTURA ---
+     // --- LÃƒÆ’Ã¢â‚¬Å“GICA DE AJUSTE DE ALTURA ---
     const miniCardsDiv = sheetContainer.querySelector('.div-miniCards');
     const statsDiv = sheetContainer.querySelector('.div-Stats');
     const collectionDock = sheetContainer.querySelector('.character-collection-dock');
@@ -1500,11 +1552,11 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
     if (miniCardsDiv && statsDiv) {
         const adjustStatsHeight = () => {
             const miniCardsHeight = miniCardsDiv.offsetHeight;
-            // Define a altura mínima do statsDiv igual à do miniCardsDiv.
+            // Define a altura mÃƒÆ’Ã‚Â­nima do statsDiv igual ÃƒÆ’Ã‚Â  do miniCardsDiv.
             // Se miniCards for maior, statsDiv cresce.
-            // Se miniCards for menor, o min-height será pequeno e o statsDiv manterá seu tamanho natural (comportamento "não fazer nada").
+            // Se miniCards for menor, o min-height serÃƒÆ’Ã‚Â¡ pequeno e o statsDiv manterÃƒÆ’Ã‚Â¡ seu tamanho natural (comportamento "nÃƒÆ’Ã‚Â£o fazer nada").
             statsDiv.style.minHeight = `${miniCardsHeight - 10}px`;
-            // Opcional: Ajustar o alinhamento do conteúdo para ficar centralizado ou distribuído se esticar muito
+            // Opcional: Ajustar o alinhamento do conteÃƒÆ’Ã‚Âºdo para ficar centralizado ou distribuÃƒÆ’Ã‚Â­do se esticar muito
             statsDiv.style.display = 'flex';
             statsDiv.style.flexDirection = 'column';
             statsDiv.style.justifyContent = 'space-evenly'; 
@@ -1531,13 +1583,13 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
         // Executa imediatamente
         adjustStatsHeight();
 
-        // Cria um observador para ajustar caso o inventário carregue depois e mude o tamanho
+        // Cria um observador para ajustar caso o inventÃƒÆ’Ã‚Â¡rio carregue depois e mude o tamanho
         const resizeObserver = new ResizeObserver(() => {
             adjustStatsHeight();
         });
         resizeObserver.observe(miniCardsDiv);
         
-        // Salva a referência no container para limpar depois
+        // Salva a referÃƒÆ’Ã‚Âªncia no container para limpar depois
         sheetContainer._statsResizeObserver = resizeObserver;
     }
     // -----------------------------------

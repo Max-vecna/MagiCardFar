@@ -4,6 +4,7 @@ import { openSelectionModal as openItemSelectionModal } from './navigation_manag
 import { renderFullCharacterSheet } from './card-renderer.js';
 import { renderFullSpellSheet } from './magic_renderer.js';
 import { renderFullAttackSheet } from './attack_renderer.js';
+import { saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
 import { readFileAsArrayBuffer, bufferToBlob, arrayBufferToBase64, base64ToArrayBuffer, showImagePreview, calculateColor, showCustomConfirm } from './ui_utils.js';
 
 const PERICIAS_DATA = {
@@ -1024,14 +1025,20 @@ export async function importCard(file) {
                 const importedCard = JSON.parse(e.target.result);
                 if (!importedCard || importedCard.id === undefined) throw new Error("Formato inválido.");
 
-                importedCard.id = Date.now().toString();
-                importedCard.inPlay = false;
+                const existingCard = await getData('rpgCards', importedCard.id);
+                importedCard.id = existingCard ? String(existingCard.id) : Date.now().toString();
+                importedCard.inPlay = existingCard ? Boolean(existingCard.inPlay) : false;
+                if (importedCard.arenaModel || importedCard._arenaModel) {
+                    importedCard.disableArenaModel = false;
+                    importedCard._disableArenaModel = false;
+                }
 
                 if (importedCard.image) importedCard.image = base64ToArrayBuffer(importedCard.image);
                 if (importedCard.backgroundImage) importedCard.backgroundImage = base64ToArrayBuffer(importedCard.backgroundImage);
 
                 importedCard.predominantColor = await calculateColor(importedCard.backgroundImage, importedCard.backgroundMimeType);
 
+                saveArenaModelTemplateFromCard(importedCard);
                 await saveData('rpgCards', importedCard);
                 resolve(importedCard);
             } catch (error) {

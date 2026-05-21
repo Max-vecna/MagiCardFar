@@ -1,6 +1,7 @@
 import { saveData, getData, removeData } from './local_db.js';
 import { getAumentosData, populateCharacterSelect } from './character_manager.js';
 import { populateCategorySelect } from './category_manager.js';
+import { saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
 import {
     showImagePreview,
     readFileAsArrayBuffer as readFileAsArrayBufferUtil,
@@ -1350,11 +1351,17 @@ export async function importItem(file) {
         reader.onload = async (e) => {
             try {
                 const importedItem = JSON.parse(e.target.result);
-                importedItem.id = Date.now().toString(); 
+                const existingItem = await getData('rpgItems', importedItem.id);
+                importedItem.id = existingItem ? String(existingItem.id) : Date.now().toString();
+                if (importedItem.arenaModel || importedItem._arenaModel) {
+                    importedItem.disableArenaModel = false;
+                    importedItem._disableArenaModel = false;
+                }
                 if (importedItem.image) {
                     importedItem.image = base64ToArrayBufferUtil(importedItem.image);
                 }
                 importedItem.predominantColor = await calculateColorUtil(importedItem.image, importedItem.imageMimeType, { color30: 'rgba(217, 119, 6, 0.3)', color100: 'rgb(217, 119, 6)' });
+                saveArenaModelTemplateFromCard(importedItem);
                 await saveData('rpgItems', importedItem);
                 resolve(importedItem);
             } catch (error) {

@@ -1,6 +1,7 @@
 import { saveData, getData, removeData } from './local_db.js';
 import { getAumentosData, populateCharacterSelect } from './character_manager.js';
 import { populateCategorySelect } from './category_manager.js';
+import { saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
 import {
     showImagePreview,
     readFileAsArrayBuffer as readFileAsArrayBufferUtil,
@@ -1450,7 +1451,12 @@ export async function importSpell(file, type) {
                     throw new Error("Formato de arquivo inválido.");
                 }
 
-                importedSpell.id = Date.now().toString();
+                const existingSpell = await getData('rpgEffects', importedSpell.id);
+                importedSpell.id = existingSpell ? String(existingSpell.id) : Date.now().toString();
+                if (importedSpell.arenaModel || importedSpell._arenaModel) {
+                    importedSpell.disableArenaModel = false;
+                    importedSpell._disableArenaModel = false;
+                }
                 if (type === 'habilidades') importedSpell.type = 'habilidade';
                 else if (type === 'ataques') importedSpell.type = 'ataque';
                 else importedSpell.type = 'magia';
@@ -1462,6 +1468,7 @@ export async function importSpell(file, type) {
                 importedSpell.predominantColor = await calculateColorUtil(importedSpell.image, importedSpell.imageMimeType, importedSpell.type === 'ataque'
                     ? { color30: 'rgba(248, 113, 113, 0.3)', color100: 'rgb(248, 113, 113)' }
                     : { color30: 'rgba(13, 148, 136, 0.3)', color100: 'rgb(13, 148, 136)' });
+                saveArenaModelTemplateFromCard(importedSpell);
                 await saveData('rpgEffects', importedSpell);
                 resolve(importedSpell);
             } catch (error) {

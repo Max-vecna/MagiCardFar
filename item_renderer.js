@@ -1,4 +1,5 @@
 import { bufferToBlob } from './ui_utils.js';
+import { hasArenaModel, renderArenaModelSheet } from './arena_model_renderer.js';
 
 async function getRelatedItemCards(itemData) {
     const { getData } = await import('./local_db.js');
@@ -179,6 +180,13 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
     const sheetContainer = document.getElementById('item-sheet-container');
     if (!sheetContainer) return '';
 
+    if (hasArenaModel(itemData)) {
+        return renderArenaModelSheet(itemData, isModal, {
+            ...options,
+            containerId: 'item-sheet-container'
+        });
+    }
+
     const aspectRatio = 9 / 16;
 
     if(isModal) {  
@@ -207,9 +215,9 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
     const details = [
         { label: 'Tipo', value: itemData.type },
         { label: 'Acerto', value: itemData.acerto },
-        { label: 'Critico', value: itemData.critico },
-        { label: 'Dano', value: itemData.damage },
-        { label: 'Dano Sem Mana', value: itemData.danoSemMana },
+        { label: 'Acerto Critico', value: itemData.critico },
+        { label: 'ATK', value: itemData.damage || itemData.dano },
+        { label: 'ATK sem Mana', value: itemData.danoSemMana },
         { label: 'Dado Vida', value: itemData.vidaDado },
         { label: 'Dado Mana', value: itemData.manaDado },
         { label: 'Carga', value: itemData.charge },
@@ -231,10 +239,10 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
     }
 
     const diceStatsHtml = renderSideDiceRail([
-        { key: 'acerto', label: 'ATK', icon: 'fa-dice-d20', value: itemData.acerto },
-        { key: 'critico', label: 'ATK s/Mana', icon: 'fa-crosshairs', value: itemData.critico },
-        { key: 'damage', label: 'DMG', icon: 'fa-fire', value: itemData.damage },
-        { key: 'danoSemMana', label: 'DMG s/Mana', icon: 'fa-skull', value: itemData.danoSemMana },
+        { key: 'acerto', label: 'Acerto', icon: 'fa-dice-d20', value: itemData.acerto },
+        { key: 'critico', label: 'Acerto Critico', icon: 'fa-crosshairs', value: itemData.critico },
+        { key: 'damage', label: 'ATK', icon: 'fa-fire', value: itemData.damage || itemData.dano },
+        { key: 'danoSemMana', label: 'ATK s/Mana', icon: 'fa-skull', value: itemData.danoSemMana },
         { key: 'vidaDado', label: 'PV', icon: 'fa-heart', value: itemData.vidaDado },
         { key: 'manaDado', label: 'PM', icon: 'fa-fire', value: itemData.manaDado }
     ], predominantColor);

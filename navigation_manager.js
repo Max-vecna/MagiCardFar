@@ -7,6 +7,7 @@ import { openDatabase, removeData, getData, saveData, exportDatabase, importData
 import { renderFullCharacterSheet } from './card-renderer.js';
 import { renderFullSpellSheet } from './magic_renderer.js';
 import { renderFullItemSheet } from './item_renderer.js';
+import { hasArenaModel, seedArenaModelTemplatesFromLocalData } from './arena_model_renderer.js';
 import { showCustomAlert, showCustomConfirm } from './ui_utils.js';
 import { bufferToBlob } from './ui_utils.js';
 
@@ -30,8 +31,13 @@ const MENU_ACTION_LABELS = {
     edit: 'editar',
     remove: 'excluir',
     delete: 'excluir',
-    'export-json': 'exportar'
+    'export-json': 'exportar',
+    'reset-arena-model': 'voltar ao visual original'
 };
+
+function cardHasArenaLayout(card) {
+    return Boolean(card && hasArenaModel(card));
+}
 
 function escapeHtml(value = '') {
     return String(value)
@@ -595,12 +601,8 @@ function applyThumbnailScaling(container) {
         const thumbnails = Array.from(container.querySelectorAll('.rpg-thumbnail'));
 
         thumbnails.forEach(t => t.classList.remove('visible'));
-        //svoid container.offsetHeight;
-
-        thumbnails.forEach((cardWrapper, index) => {
-            setTimeout(() => cardWrapper.classList.add('visible'), index * 50);
-
-            
+        requestAnimationFrame(() => {
+            thumbnails.forEach(cardWrapper => cardWrapper.classList.add('visible'));
         });
     });
 }
@@ -891,6 +893,7 @@ async function createItemGrid(items, type, renderSheetFunction) {
                     <button class="menu-item" data-action="edit" data-id="${item.id}"><i class="fas fa-edit"></i></button>
                     <button class="menu-item" data-action="remove" data-id="${item.id}"><i class="fas fa-trash-alt"></i></button>
                     <button class="menu-item" data-action="export-json" data-id="${item.id}"><i class="fas fa-file-download"></i></button>
+                    ${cardHasArenaLayout(item) ? `<button class="menu-item" data-action="reset-arena-model" data-id="${item.id}" title="Voltar ao visual original"><i class="fas fa-rotate-left"></i></button>` : ''}
                 </div>
             </div>
         `;
@@ -1142,6 +1145,7 @@ async function renderCharacterList(container, listType = 'character') {
                     <button class="menu-item" data-action="edit" data-id="${char.id}"><i class="fas fa-edit"></i></button>
                     <button class="menu-item" data-action="remove" data-id="${char.id}"><i class="fas fa-trash-alt"></i></button>
                     <button class="menu-item" data-action="export-json" data-id="${char.id}"><i class="fas fa-file-download"></i></button>
+                    ${cardHasArenaLayout(char) ? `<button class="menu-item" data-action="reset-arena-model" data-id="${char.id}" title="Voltar ao visual original"><i class="fas fa-rotate-left"></i></button>` : ''}
                     ${!isCreatureList ? (char.inPlay
                         ? `<button class="menu-item" data-action="remove-from-play" data-id="${char.id}"><i class="fas fa-sign-out-alt"></i></button>`
                         : `<button class="menu-item" data-action="set-in-play" data-id="${char.id}"><i class="fas fa-play-circle"></i></button>`) : ''}
@@ -1232,6 +1236,7 @@ async function renderAttackList(container) {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
+    await seedArenaModelTemplatesFromLocalData();
     // ... [Styles and DOM element selection remain the same] ...
     const style = document.createElement('style');
     style.innerHTML = `
@@ -1360,6 +1365,30 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (cardType === 'spell') await exportSpell(cardId);
             if (cardType === 'item') await exportItem(cardId);
             if (cardType === 'attack') await exportSpell(cardId);
+        } else if (action === 'reset-arena-model') {
+            let storeName = '';
+            let eventType = activeNav;
+            if (cardType === 'character' || cardType === 'creature') {
+                storeName = 'rpgCards';
+                eventType = cardType === 'creature' ? 'criaturas' : 'personagem';
+            } else if (cardType === 'spell' || cardType === 'attack') {
+                storeName = 'rpgEffects';
+                eventType = cardType === 'attack' ? 'ataques' : getEventTypeForEffect(await getData('rpgEffects', cardId));
+            } else if (cardType === 'item') {
+                storeName = 'rpgItems';
+                eventType = 'itens';
+            }
+
+            if (!storeName) return;
+            const card = await getData(storeName, cardId);
+            if (!card) return;
+            if (!(await showCustomConfirm('Voltar este card para o visual original da pagina? O layout da Arena sera removido deste card.'))) return;
+            delete card.arenaModel;
+            delete card._arenaModel;
+            card.disableArenaModel = true;
+            card._disableArenaModel = true;
+            await saveData(storeName, card);
+            document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: eventType } }));
         } else if (action === 'set-in-play' || action === 'remove-from-play') {
             const isSettingInPlay = action === 'set-in-play';
             const allCharacters = (await getData('rpgCards')).filter(char => char.cardType !== 'creature');
@@ -1746,6 +1775,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             const cachedView = document.getElementById(`view-${targetView}`);
             if (cachedView) cachedView.remove();
         }
+        if (type === 'categorias') {
+            ['magias', 'habilidades', 'itens', 'ataques'].forEach(view => {
+                const cachedView = document.getElementById(`view-${view}`);
+                if (cachedView) cachedView.remove();
+            });
+        }
         if (['personagem', 'itens', 'magias', 'habilidades', 'ataques'].includes(type)) {
             const cachedInPlayView = document.getElementById('view-personagem-em-jogo');
             if (cachedInPlayView) cachedInPlayView.remove();
@@ -1753,7 +1788,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         
         // Se a navegação ativa for a que mudou, recarrega
         const activeNav = document.querySelector('.nav-button.active, .desktop-nav-button.active')?.dataset.target;
-        if (activeNav === targetView || activeNav === 'personagem-em-jogo') {
+        if (activeNav === targetView || activeNav === 'personagem-em-jogo' || (type === 'categorias' && ['magias', 'habilidades', 'itens', 'ataques'].includes(activeNav))) {
             renderContent(activeNav, true);
         }
     });

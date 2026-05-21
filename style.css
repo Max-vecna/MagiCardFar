@@ -342,13 +342,27 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
 /* Grid de Cards */
 .rpg-thumbnail {
   width: calc(100%);
-  height: 100%;
+  max-width: 180px;
+  height: auto;
+  aspect-ratio: 9 / 16;
   position: relative;
   z-index: 10;
   isolation: isolate;
 
   /* transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;*/
   overflow: visible; /* Garante que o menu não seja cortado */ /* Garante que o menu não seja cortado */
+}
+
+@media (min-width: 768px) {
+  .rpg-thumbnail {
+    max-width: 210px;
+  }
+}
+
+@media (min-width: 1280px) {
+  .rpg-thumbnail {
+    max-width: 230px;
+  }
 }
 
 .rpg-thumbnail.menu-active {
@@ -506,6 +520,11 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
   isolation: isolate;
   /* overflow: hidden; */
   border-radius: 18px;
+}
+
+.miniCard .arena-model-card {
+  max-width: none;
+  max-height: none;
 }
 
 .related-card-stack-layer {
