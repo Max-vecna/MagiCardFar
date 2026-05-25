@@ -220,6 +220,64 @@ function getLabelIconSize(element) {
     return clampNumber(element?.labelIconSize ?? fallback, 24, 260);
 }
 
+function getLabelIconShadowColor(element) {
+    return normalizeHexColor(element?.labelIconShadowColor, '#000000');
+}
+
+function getLabelIconShadowOpacity(element) {
+    return clampNumber(element?.labelIconShadowOpacity ?? 75, 0, 100);
+}
+
+function getLabelIconShadowX(element) {
+    return clampNumber(element?.labelIconShadowX ?? 2, -80, 80);
+}
+
+function getLabelIconShadowY(element) {
+    return clampNumber(element?.labelIconShadowY ?? 4, -80, 80);
+}
+
+function getLabelIconShadowBlur(element) {
+    return clampNumber(element?.labelIconShadowBlur ?? 6, 0, 120);
+}
+
+function getLabelIconGlowColor(element, fallback = '#ff7070') {
+    return normalizeHexColor(element?.labelIconGlowColor, fallback);
+}
+
+function getLabelIconGlowSize(element) {
+    return clampNumber(element?.labelIconGlowSize ?? 0, 0, 120);
+}
+
+function getLabelIconGlowOpacity(element) {
+    return clampNumber(element?.labelIconGlowOpacity ?? 0, 0, 100);
+}
+
+function getLabelIconBrightness(element) {
+    return clampNumber(element?.labelIconBrightness ?? 100, 40, 180);
+}
+
+function buildLabelIconFilter(element, glowFallback = '#ff7070') {
+    const shadow = hexToRgba(getLabelIconShadowColor(element), getLabelIconShadowOpacity(element) / 100);
+    const glow = hexToRgba(getLabelIconGlowColor(element, glowFallback), getLabelIconGlowOpacity(element) / 100);
+    return [
+        `drop-shadow(${formatNumber(getLabelIconShadowX(element))}px ${formatNumber(getLabelIconShadowY(element))}px ${formatNumber(getLabelIconShadowBlur(element))}px ${shadow})`,
+        `drop-shadow(0 0 ${formatNumber(getLabelIconGlowSize(element))}px ${glow})`,
+        `brightness(${formatNumber(getLabelIconBrightness(element) / 100)})`
+    ].join(' ');
+}
+
+function getSolidBackgroundLabelIconFallbackColor(element) {
+    if (!element) return '';
+    const hasSolidFill = element.parentId
+        ? getEffectiveChildFillMode(element) === 'solid'
+        : element.backgroundGradient === false;
+    return hasSolidFill ? normalizeHexColor(element.colorA, '') : '';
+}
+
+function hasCustomLabelIconColor(element) {
+    return Boolean(element?.labelIconColorCustom);
+}
+
 function restoreLabelStyleRules(code, elements) {
     let next = String(code || '');
     (elements || []).forEach(element => {
@@ -230,16 +288,22 @@ function restoreLabelStyleRules(code, elements) {
         const labelSize = `${formatNumber(clampNumber(element.labelSize || 16, 8, 96))}px`;
         const extraColor = normalizeHexColor(element.labelExtraColor, labelColor);
         const extraSize = `${formatNumber(clampNumber(element.labelExtraSize || 13, 8, 72))}px`;
-        const iconColor = normalizeHexColor(element.labelIconColor, labelColor);
+        const solidIconFallback = getSolidBackgroundLabelIconFallbackColor(element);
+        const iconFallback = normalizeHexColor(element.labelIconColor, labelColor);
+        const iconColor = hasCustomLabelIconColor(element)
+            ? iconFallback
+            : (solidIconFallback ? cardColorVar(solidIconFallback) : cardColorVar(iconFallback));
         const iconSize = `${formatNumber(getLabelIconSize(element))}px`;
-        const iconOpacity = formatNumber(clampNumber(element.labelIconOpacity ?? 22, 0, 100) / 100);
+        const iconOpacity = formatNumber((solidIconFallback ? 100 : clampNumber(element.labelIconOpacity ?? 22, 0, 100)) / 100);
+        const iconFilter = buildLabelIconFilter(element, iconFallback);
         const labelWeight = element.labelBold === false ? '500' : '800';
         const extraWeight = element.labelExtraBold ? '800' : '650';
 
         next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label-bg-icon`, block => {
             let updated = setCssProperty(block, 'color', iconColor);
             updated = setCssProperty(updated, 'font-size', iconSize);
-            return setCssProperty(updated, 'opacity', iconOpacity);
+            updated = setCssProperty(updated, 'opacity', iconOpacity);
+            return setCssProperty(updated, 'filter', iconFilter);
         });
         next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label`, block => {
             let updated = setCssProperty(block, 'color', labelColor);
@@ -691,11 +755,10 @@ function hydrateArenaModelCode(code, cardData, scopeId = '') {
     template.content.querySelectorAll('[data-card-field]').forEach(node => {
         const key = node.getAttribute('data-card-field') || '';
         const value = getCardFieldValue(cardData, key);
-        if (value !== '') {
-            const main = node.querySelector('.clip-label-main');
-            if (main) main.textContent = value;
-            else if (!node.querySelector('.clip-label-extra')) node.textContent = value;
-        }
+        const displayValue = valueHasText(value) ? value : '-';
+        const main = node.querySelector('.clip-label-main');
+        if (main) main.textContent = displayValue;
+        else if (!node.querySelector('.clip-label-extra')) node.textContent = displayValue;
         if (node.getAttribute('data-card-title-meta') === 'mana-circle') {
             const metaValue = buildCardTitleMetaValue(cardData);
             let extra = node.querySelector('.clip-label-extra');

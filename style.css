@@ -618,6 +618,7 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
   margin: 0 auto;
   max-height: 90vh;
   outline: none;
+  --spell-carousel-card-scale: 0.88;
 }
 
 .spell-carousel-track,
@@ -635,10 +636,19 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
   display: grid;
 }
 
+.spell-carousel-card-frame {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  transform: scale(var(--spell-carousel-card-scale));
+  transform-origin: center;
+}
+
 .spell-carousel-label {
   position: absolute;
   left: 50%;
-  top: 0.65rem;
+  top: 0.12rem;
   z-index: 60;
   transform: translateX(-50%);
   padding: 0.35rem 0.75rem;
@@ -678,11 +688,11 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
 }
 
 .spell-carousel-nav.prev {
-  left: -2.5rem;
+  left: -2.85rem;
 }
 
 .spell-carousel-nav.next {
-  right: -2.5rem;
+  right: -2.85rem;
 }
 
 .spell-carousel-dots {
@@ -885,20 +895,24 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
 }
 
 @media (max-width: 640px) {
+  .spell-carousel-shell {
+    --spell-carousel-card-scale: 0.78;
+  }
+
   .spell-carousel-nav {
-    width: 2.35rem;
-    height: 2.35rem;
+    width: 2rem;
+    height: 2rem;
     background: rgba(0, 0, 0, 0.72);
     border: 1px solid rgba(255, 255, 255, 0.18);
     box-shadow: 0 8px 18px rgba(0, 0, 0, 0.35);
   }
 
   .spell-carousel-nav.prev {
-    left: 0.45rem;
+    left: -0.75rem;
   }
 
   .spell-carousel-nav.next {
-    right: 0.45rem;
+    right: -0.75rem;
   }
 
   .spell-carousel-dots {

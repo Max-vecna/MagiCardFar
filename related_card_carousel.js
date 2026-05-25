@@ -111,7 +111,9 @@ export async function buildRelatedCardCarousel({
         return `
             <div class="spell-carousel-slide${isActive ? ' active' : ''}" data-slide-index="${index}" aria-hidden="${isActive ? 'false' : 'true'}">
                 <div class="spell-carousel-label">${escapeHtml(relation.label)}</div>
-                ${cardHtml}
+                <div class="spell-carousel-card-frame">
+                    ${cardHtml}
+                </div>
             </div>
         `;
     }))).join('');
