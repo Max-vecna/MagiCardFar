@@ -736,6 +736,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
     if (hasArenaModel(characterData)) {
         const html = renderArenaModelSheet(characterData, isModal, {
             ...renderOptions,
+            isInPlay,
             container: sheetContainer,
             containerId: 'character-sheet-container'
         });

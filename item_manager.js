@@ -1,7 +1,7 @@
 import { saveData, getData, removeData } from './local_db.js';
 import { getAumentosData, populateCharacterSelect } from './character_manager.js';
 import { populateCategorySelect } from './category_manager.js';
-import { saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
+import { isArenaModelTemplatePayload, saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
 import {
     showImagePreview,
     readFileAsArrayBuffer as readFileAsArrayBufferUtil,
@@ -1351,6 +1351,14 @@ export async function importItem(file) {
         reader.onload = async (e) => {
             try {
                 const importedItem = JSON.parse(e.target.result);
+                if (isArenaModelTemplatePayload(importedItem)) {
+                    const templateCard = importedItem.app === 'arena-card-model'
+                        ? { arenaModel: importedItem, type: 'item' }
+                        : { ...importedItem, type: importedItem.type || 'item' };
+                    saveArenaModelTemplateFromCard({ ...templateCard, _arenaStoreName: 'rpgItems' });
+                    resolve({ __arenaModelTemplateOnly: true });
+                    return;
+                }
                 const existingItem = await getData('rpgItems', importedItem.id);
                 importedItem.id = existingItem ? String(existingItem.id) : Date.now().toString();
                 if (importedItem.arenaModel || importedItem._arenaModel) {

@@ -414,6 +414,12 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
   border-color: rgba(79, 70, 229, 0.34);
 }
 
+.bulk-delete-toolbar__button--model-reset {
+  color: #164e63;
+  background: rgba(6, 182, 212, 0.14);
+  border-color: rgba(8, 145, 178, 0.34);
+}
+
 .bulk-delete-toolbar__button--danger {
   display: none;
   color: #fff;
@@ -442,6 +448,10 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
 }
 
 .bulk-delete-toolbar--active .bulk-delete-toolbar__button--select {
+  display: none;
+}
+
+.bulk-delete-toolbar--active .bulk-delete-toolbar__button--model-reset {
   display: none;
 }
 
@@ -518,13 +528,27 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
 
 .miniCard {
   isolation: isolate;
-  /* overflow: hidden; */
-  border-radius: 18px;
+  /* //border-radius: 10px; */
+}
+
+.miniCard.has-arena-model,
+.miniCard:has(> .arena-model-card),
+.miniCard:has(.related-card-stack-layer > .arena-model-card) {
+  overflow: hidden;
 }
 
 .miniCard .arena-model-card {
   max-width: none;
   max-height: none;
+}
+
+.miniCard > .arena-model-card,
+.related-card-stack-layer > .arena-model-card {
+  position: absolute;
+  top: 0;
+  left: 0;
+  margin: 0 !important;
+  transform-origin: top left !important;
 }
 
 .spell-relation-pill {
@@ -2118,7 +2142,9 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
 .character-form-mini-card > div[id^="spell-sheet-"],
 .character-form-mini-card > div[id^="attack-sheet-"],
 .character-form-mini-card > div[id^="item-sheet-"],
-.relationship-form-thumbnail > div[id^="character-sheet-"] {
+.relationship-form-thumbnail > div[id^="character-sheet-"],
+.character-form-mini-card > .arena-model-card,
+.relationship-form-thumbnail > .arena-model-card {
     position: absolute;
     top: 0;
     left: 0;

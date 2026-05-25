@@ -4,7 +4,7 @@ import { openSelectionModal as openItemSelectionModal } from './navigation_manag
 import { renderFullCharacterSheet } from './card-renderer.js';
 import { renderFullSpellSheet } from './magic_renderer.js';
 import { renderFullAttackSheet } from './attack_renderer.js';
-import { saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
+import { isArenaModelTemplatePayload, saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
 import { readFileAsArrayBuffer, bufferToBlob, arrayBufferToBase64, base64ToArrayBuffer, showImagePreview, calculateColor, showCustomConfirm } from './ui_utils.js';
 
 const PERICIAS_DATA = {
@@ -536,6 +536,28 @@ export async function populateCharacterSelect(selectId, includeNoneOption = true
     }
 }
 
+function scaleArenaModelInFormMiniCard(cardElement) {
+    requestAnimationFrame(() => {
+        const arenaSheet = Array.from(cardElement.children).find(child => child.classList?.contains('arena-model-card'));
+        if (!arenaSheet) return;
+
+        const sheetWidth = parseFloat(arenaSheet.style.width) || Number(arenaSheet.dataset.arenaModelWidth) || arenaSheet.offsetWidth;
+        const sheetHeight = parseFloat(arenaSheet.style.height) || Number(arenaSheet.dataset.arenaModelHeight) || arenaSheet.offsetHeight;
+        const caption = cardElement.querySelector('.character-form-mini-card__caption');
+        const targetWidth = cardElement.clientWidth;
+        const targetHeight = Math.max(1, cardElement.clientHeight - (caption?.offsetHeight || 0));
+        if (sheetWidth <= 0 || sheetHeight <= 0 || targetWidth <= 0 || targetHeight <= 0) return;
+
+        const scale = Math.min(targetWidth / sheetWidth, targetHeight / sheetHeight);
+        arenaSheet.style.position = 'absolute';
+        arenaSheet.style.top = '0';
+        arenaSheet.style.left = '0';
+        arenaSheet.style.margin = '0';
+        arenaSheet.style.transformOrigin = 'top left';
+        arenaSheet.style.setProperty('transform', `scale(${scale})`, 'important');
+    });
+}
+
 async function createSelectedElement(data, type) {
     let containerId;
     let iconClass;
@@ -598,6 +620,7 @@ async function createSelectedElement(data, type) {
             itemElement.remove();
         });
         container.appendChild(itemElement);
+        scaleArenaModelInFormMiniCard(itemElement);
         return;
     }
 
@@ -996,12 +1019,20 @@ export async function exportCard(cardId) {
     }
 }
 
-export async function importCard(file) {
+export async function importCard(file, forcedCardType = '') {
     return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = async (e) => {
             try {
                 const importedCard = JSON.parse(e.target.result);
+                if (isArenaModelTemplatePayload(importedCard)) {
+                    const templateCard = importedCard.app === 'arena-card-model'
+                        ? { arenaModel: importedCard, cardType: forcedCardType || 'character' }
+                        : { ...importedCard, cardType: forcedCardType || importedCard.cardType || 'character' };
+                    saveArenaModelTemplateFromCard({ ...templateCard, _arenaStoreName: 'rpgCards' });
+                    resolve({ __arenaModelTemplateOnly: true });
+                    return;
+                }
                 if (!importedCard || importedCard.id === undefined) throw new Error("Formato inválido.");
 
                 const existingCard = await getData('rpgCards', importedCard.id);

@@ -1,7 +1,7 @@
 import { saveData, getData, removeData } from './local_db.js';
 import { getAumentosData, populateCharacterSelect } from './character_manager.js';
 import { populateCategorySelect } from './category_manager.js';
-import { saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
+import { isArenaModelTemplatePayload, saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
 import {
     showImagePreview,
     readFileAsArrayBuffer as readFileAsArrayBufferUtil,
@@ -1447,6 +1447,15 @@ export async function importSpell(file, type) {
         reader.onload = async (e) => {
             try {
                 const importedSpell = JSON.parse(e.target.result);
+                if (isArenaModelTemplatePayload(importedSpell)) {
+                    const templateType = type === 'habilidades' ? 'habilidade' : (type === 'ataques' ? 'ataque' : 'magia');
+                    const templateCard = importedSpell.app === 'arena-card-model'
+                        ? { arenaModel: importedSpell, type: templateType }
+                        : { ...importedSpell, type: templateType };
+                    saveArenaModelTemplateFromCard({ ...templateCard, _arenaStoreName: 'rpgEffects' });
+                    resolve({ __arenaModelTemplateOnly: true });
+                    return;
+                }
                 if (!importedSpell || importedSpell.id === undefined) {
                     throw new Error("Formato de arquivo inválido.");
                 }

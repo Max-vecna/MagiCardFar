@@ -78,6 +78,33 @@ function getEffectiveChildFillMode(element) {
     return 'solid';
 }
 
+function cardColorVar(fallback = '#0d9488') {
+    return `var(--arena-card-color, ${normalizeHexColor(fallback, '#0d9488')})`;
+}
+
+function cardSoftColorVar(fallback, alpha, variableName) {
+    return `var(${variableName}, ${hexToRgba(fallback, alpha)})`;
+}
+
+function replaceImageBackdropColorRules(code, elements, sourceRootId = '') {
+    let next = String(code || '');
+    (elements || [])
+        .filter(element => shouldUseCardImageForElement(element, sourceRootId))
+        .forEach(element => {
+            const className = escapeRegExp(cssClassForElement(element));
+            const fallback = normalizeHexColor(element.parentBgColor || element.colorA, '#0d9488');
+            const dynamicColor = cardColorVar(fallback);
+
+            next = replaceCssRuleBlock(next, `\\.clip-div\\.${className}\\s*>\\s*\\.clip-image-color-bg`, block => (
+                setCssProperty(block, 'background', dynamicColor)
+            ));
+            next = replaceCssRuleBlock(next, `\\.clip-div\\.${className}\\s*>\\s*\\.clip-parent-bg`, block => (
+                setCssProperty(block, 'background', dynamicColor)
+            ));
+        });
+    return next;
+}
+
 function replaceSolidChildColorRules(code, elements) {
     let next = String(code || '');
     (elements || [])
@@ -85,10 +112,11 @@ function replaceSolidChildColorRules(code, elements) {
         .forEach(element => {
             const className = cssClassForElement(element);
             const fallback = normalizeHexColor(element.colorA, '#0d9488');
+            const dynamicColor = cardColorVar(fallback);
             const blockPattern = new RegExp(`(\\.clip-div\\.${escapeRegExp(className)}::before\\s*\\{[\\s\\S]*?\\n\\})`, 'g');
             next = next.replace(blockPattern, block => {
                 let updated = block
-                    .replace(/background-color:\s*[^;]+;/, `background-color: ${fallback};`)
+                    .replace(/background-color:\s*[^;]+;/, `background-color: ${dynamicColor};`)
                     .replace(/background-image:\s*[^;]+;/, 'background-image: none;');
                 if (/opacity:\s*[^;]+;/.test(updated)) {
                     updated = updated.replace(/opacity:\s*[^;]+;/, 'opacity: 1;');
@@ -113,7 +141,7 @@ function replaceGradientChildColorRules(code, elements) {
             const fallbackA = normalizeHexColor(element.colorA, '#0d9488');
             const fallbackB = normalizeHexColor(element.colorB, fallbackA);
             const intensity = clampNumber(element.colorImageIntensity ?? 62, 0, 100) / 100;
-            const gradientImage = `linear-gradient(145deg, ${hexToRgba(fallbackA, intensity)}, ${hexToRgba(fallbackB, intensity)})`;
+            const gradientImage = `linear-gradient(145deg, ${cardSoftColorVar(fallbackA, intensity, '--arena-card-color-soft')}, ${cardSoftColorVar(fallbackB, intensity, '--arena-card-color-light-soft')})`;
             let replacedOverlay = false;
 
             if (parentClassName) {
@@ -290,6 +318,22 @@ function writeArenaModelTemplates(templates) {
     localStorage.setItem(ARENA_MODEL_TEMPLATE_STORAGE_KEY, JSON.stringify(templates || {}));
 }
 
+export function clearArenaModelTemplates() {
+    arenaModelTemplatesCache = {};
+    try {
+        localStorage.removeItem(ARENA_MODEL_TEMPLATE_STORAGE_KEY);
+    } catch (error) {
+        console.warn('Nao foi possivel limpar os templates do Arena:', error);
+    }
+}
+
+export function isArenaModelTemplatePayload(cardData) {
+    if (!cardData || typeof cardData !== 'object') return false;
+    if (cardData._arenaModelTemplateOnly || cardData.arenaModelTemplateOnly) return true;
+    if (cardData.app === 'arena-card-model' && (cardData.generatedCode || cardData.html || cardData.code)) return true;
+    return false;
+}
+
 function sanitizeArenaModelForTemplate(model) {
     if (!model || typeof model !== 'object') return model;
     const copy = typeof structuredClone === 'function'
@@ -324,6 +368,7 @@ function sanitizeArenaModelForTemplate(model) {
     ['generatedCode', 'html', 'code'].forEach(key => {
         if (typeof copy[key] === 'string') {
             copy[key] = replaceSpecificBackgroundImagesInCode(copy[key], cardImageBackgrounds, 'var(--arena-card-image, none)');
+            copy[key] = replaceImageBackdropColorRules(copy[key], copy.elements, sourceRootId);
             copy[key] = replaceSolidChildColorRules(copy[key], copy.elements);
             copy[key] = replaceGradientChildColorRules(copy[key], copy.elements);
             copy[key] = restoreTransparentChildRules(copy[key], copy.elements);
@@ -439,6 +484,40 @@ function getCardFieldValue(cardData, key) {
         if (valueHasText(value)) return value;
     }
     return '';
+}
+
+function normalizeCardTitleMetaValue(value) {
+    if (value === undefined || value === null) return '';
+    return String(value).trim().replace(/\s+/g, ' ');
+}
+
+function formatManaTitleMetaValue(value) {
+    const text = normalizeCardTitleMetaValue(value);
+    if (!text) return '';
+    const numericValue = Number(text.replace(',', '.'));
+    if (Number.isFinite(numericValue) && numericValue <= 0) return '';
+    if (/\b(mn|pm|mana)\b/i.test(text)) return text.replace(/\b(mn|pm|mana)\b/gi, 'PM');
+    return `${text} PM`;
+}
+
+function formatCircleTitleMetaValue(value) {
+    const text = normalizeCardTitleMetaValue(value);
+    if (!text) return '';
+    const numericValue = Number(text.replace(',', '.'));
+    if (Number.isFinite(numericValue) && numericValue <= 0) return '';
+    const circleMatch = text.match(/^(\d+(?:[,.]\d+)?)\s*(?:\u00ba|\u00b0)?\s*c[i\u00ed]rculo$/i);
+    if (circleMatch) return `${circleMatch[1]}\u00ba Circulo`;
+    if (/c[i\u00ed]rculo/i.test(text)) return text.replace(/c[i\u00ed]rculo/gi, 'Circulo');
+    if (/^\d+(?:[,.]\d+)?$/.test(text)) return `${text}\u00ba Circulo`;
+    if (/\u00ba|\u00b0/.test(text)) return `${text} Circulo`;
+    return `${text} Circulo`;
+}
+
+function buildCardTitleMetaValue(cardData) {
+    return [
+        formatManaTitleMetaValue(getCardFieldValue(cardData, 'manaCost')),
+        formatCircleTitleMetaValue(getCardFieldValue(cardData, 'circle'))
+    ].filter(Boolean).join(' - ');
 }
 
 function arrayBufferToBase64(buffer) {
@@ -612,10 +691,25 @@ function hydrateArenaModelCode(code, cardData, scopeId = '') {
     template.content.querySelectorAll('[data-card-field]').forEach(node => {
         const key = node.getAttribute('data-card-field') || '';
         const value = getCardFieldValue(cardData, key);
-        if (value === '') return;
-        const main = node.querySelector('.clip-label-main');
-        if (main) main.textContent = value;
-        else node.textContent = value;
+        if (value !== '') {
+            const main = node.querySelector('.clip-label-main');
+            if (main) main.textContent = value;
+            else if (!node.querySelector('.clip-label-extra')) node.textContent = value;
+        }
+        if (node.getAttribute('data-card-title-meta') === 'mana-circle') {
+            const metaValue = buildCardTitleMetaValue(cardData);
+            let extra = node.querySelector('.clip-label-extra');
+            if (metaValue) {
+                if (!extra) {
+                    extra = document.createElement('span');
+                    extra.className = 'clip-label-extra';
+                    node.appendChild(extra);
+                }
+                extra.textContent = metaValue;
+            } else if (extra) {
+                extra.remove();
+            }
+        }
     });
 
     return template.innerHTML;
@@ -630,7 +724,7 @@ function resolveArenaModelSize(model, options = {}) {
     const modelW = Number(model?.canvas?.width || model?.width || 810) || 810;
     const modelH = Number(model?.canvas?.height || model?.height || 1440) || 1440;
 
-    if (!options.isModal && !(Number(options.cardWidth) > 0 && Number(options.cardHeight) > 0)) {
+    if (!options.isModal && !options.isInPlay && !(Number(options.cardWidth) > 0 && Number(options.cardHeight) > 0)) {
         return { modelW, modelH, finalWidth: modelW, finalHeight: modelH };
     }
 
@@ -667,7 +761,7 @@ function renderArenaModelHtml(cardData, options = {}) {
     const colorVars = `--arena-card-color: ${cardColors.color}; --arena-card-color-light: ${cardColors.light}; --arena-card-color-soft: ${cardColors.soft}; --arena-card-color-light-soft: ${cardColors.lightSoft};`;
 
     return `
-        <div id="${uniqueId}" class="arena-model-card w-full h-full relative text-white" data-arena-image="${cardImageUrl ? 'ready' : 'missing'}" data-arena-model-version="${model?.schemaVersion || model?.version || 1}" style="${imageVar} ${colorVars} transform-origin: top left; width: ${finalWidth}px; height: ${finalHeight}px; margin: 0 auto; background: transparent; overflow: visible;">
+        <div id="${uniqueId}" class="arena-model-card w-full h-full relative text-white" data-arena-image="${cardImageUrl ? 'ready' : 'missing'}" data-arena-model-version="${model?.schemaVersion || model?.version || 1}" data-arena-model-width="${modelW}" data-arena-model-height="${modelH}" style="${imageVar} ${colorVars} transform-origin: top left; width: ${finalWidth}px; height: ${finalHeight}px; margin: 0 auto; background: transparent; overflow: visible;">
             <div class="arena-model-card__scale" style="width:${modelW}px; height:${modelH}px; transform: scale(${scale}); transform-origin: top left;">
                 ${code}
             </div>
