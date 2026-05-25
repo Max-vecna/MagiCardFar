@@ -1,5 +1,4 @@
 const ARENA_MODEL_TEMPLATE_STORAGE_KEY = 'arenaModelTemplates.v1';
-const sanitizedModelCache = new WeakMap();
 const cardImageUrlCache = new Map();
 let arenaModelTemplatesCache = null;
 
@@ -20,6 +19,10 @@ function cssString(value) {
 
 function safeCssName(value) {
     return String(value || 'div').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'div';
+}
+
+function safeDomId(value) {
+    return safeCssName(value || Date.now()).replace(/^[^a-z]+/, '') || 'card';
 }
 
 function cssClassForElement(element) {
@@ -60,22 +63,32 @@ function shouldUseCardImageForElement(element, sourceRootId) {
     if (!element || typeof element !== 'object') return false;
     if (sourceRootId && element.id === sourceRootId) return true;
     if (!element.parentId && element.backgroundImage) return true;
+    if (element.usesArenaCardImage || element.cardImageSource === 'card') return true;
     if (element.cardScaffoldRole === 'container') return true;
     if (element.autoCardScaffold && !element.parentId) return true;
     return false;
 }
 
+function getEffectiveChildFillMode(element) {
+    if (!element?.parentId) return 'solid';
+    if (['parent-content', 'parent-mask-cutout', 'transparent'].includes(element.childFillMode)) return 'transparent';
+    if (element.childFillMode === 'gradient') return 'gradient';
+    if (element.childFillMode === 'solid') return element.backgroundGradient !== false ? 'gradient' : 'solid';
+    if (element.backgroundGradient !== false) return 'gradient';
+    return 'solid';
+}
+
 function replaceSolidChildColorRules(code, elements) {
     let next = String(code || '');
     (elements || [])
-        .filter(element => element?.parentId && element.childFillMode === 'solid')
+        .filter(element => element?.parentId && getEffectiveChildFillMode(element) === 'solid')
         .forEach(element => {
             const className = cssClassForElement(element);
             const fallback = normalizeHexColor(element.colorA, '#0d9488');
             const blockPattern = new RegExp(`(\\.clip-div\\.${escapeRegExp(className)}::before\\s*\\{[\\s\\S]*?\\n\\})`, 'g');
             next = next.replace(blockPattern, block => {
                 let updated = block
-                    .replace(/background-color:\s*[^;]+;/, `background-color: var(--arena-card-color, ${fallback});`)
+                    .replace(/background-color:\s*[^;]+;/, `background-color: ${fallback};`)
                     .replace(/background-image:\s*[^;]+;/, 'background-image: none;');
                 if (/opacity:\s*[^;]+;/.test(updated)) {
                     updated = updated.replace(/opacity:\s*[^;]+;/, 'opacity: 1;');
@@ -91,18 +104,49 @@ function replaceSolidChildColorRules(code, elements) {
 function replaceGradientChildColorRules(code, elements) {
     let next = String(code || '');
     (elements || [])
-        .filter(element => element?.parentId && element.childFillMode === 'gradient')
+        .filter(element => element?.parentId && getEffectiveChildFillMode(element) === 'gradient')
         .forEach(element => {
             const className = cssClassForElement(element);
+            const parent = (elements || []).find(item => item?.id === element.parentId);
+            const parentClassName = parent ? cssClassForElement(parent) : '';
+            const parentUsesCardImage = parent ? shouldUseCardImageForElement(parent) : false;
             const fallbackA = normalizeHexColor(element.colorA, '#0d9488');
             const fallbackB = normalizeHexColor(element.colorB, fallbackA);
-            const intensityA = clampNumber(element.colorImageIntensity ?? 62, 0, 100);
-            const intensityB = formatNumber(intensityA);
+            const intensity = clampNumber(element.colorImageIntensity ?? 62, 0, 100) / 100;
+            const gradientImage = `linear-gradient(145deg, ${hexToRgba(fallbackA, intensity)}, ${hexToRgba(fallbackB, intensity)})`;
+            let replacedOverlay = false;
+
+            if (parentClassName) {
+                const overlayClassName = `clip-mask-child-color-${className}`;
+                const overlayPattern = new RegExp(`(\\.clip-div\\.${escapeRegExp(parentClassName)}\\s*>\\s*\\.${escapeRegExp(overlayClassName)}\\s*\\{[\\s\\S]*?\\n\\})`, 'g');
+                next = next.replace(overlayPattern, block => {
+                    replacedOverlay = true;
+                    return block
+                        .replace(/background-color:\s*[^;]+;/, 'background-color: transparent;')
+                        .replace(/background-image:\s*[^;]+;/, `background-image: ${gradientImage};`);
+                });
+            }
+
+            if (replacedOverlay) return;
+
             const blockPattern = new RegExp(`(\\.clip-div\\.${escapeRegExp(className)}::before\\s*\\{[\\s\\S]*?\\n\\})`, 'g');
+            if (parentUsesCardImage) {
+                next = next.replace(blockPattern, block => {
+                    let updated = block
+                        .replace(/background-color:\s*[^;]+;/, 'background-color: transparent;')
+                        .replace(/background-image:\s*[^;]+;/, 'background-image: none;');
+                    if (/background:\s*[^;]+;/.test(updated)) {
+                        updated = updated.replace(/background:\s*[^;]+;/, 'background: transparent;');
+                    }
+                    return setCssProperty(updated, 'opacity', '0');
+                });
+                return;
+            }
+
             next = next.replace(blockPattern, block => {
                 let updated = block
                     .replace(/background-color:\s*[^;]+;/, 'background-color: transparent;')
-                    .replace(/background-image:\s*[^;]+;/, `background-image: linear-gradient(145deg, color-mix(in srgb, var(--arena-card-color, ${fallbackA}) ${intensityA}%, transparent), color-mix(in srgb, var(--arena-card-color-light, ${fallbackB}) ${intensityB}%, transparent));`);
+                    .replace(/background-image:\s*[^;]+;/, `background-image: ${gradientImage};`);
                 if (/opacity:\s*[^;]+;/.test(updated)) {
                     updated = updated.replace(/opacity:\s*[^;]+;/, 'opacity: 1;');
                 } else {
@@ -124,6 +168,111 @@ function formatNumber(value) {
     return Number.parseFloat(Number(value || 0).toFixed(2));
 }
 
+function hexToRgba(value, alpha = 1) {
+    const hex = normalizeHexColor(value, '#0d9488').slice(1);
+    const r = parseInt(hex.slice(0, 2), 16);
+    const g = parseInt(hex.slice(2, 4), 16);
+    const b = parseInt(hex.slice(4, 6), 16);
+    return `rgba(${r}, ${g}, ${b}, ${formatNumber(clampNumber(alpha, 0, 1))})`;
+}
+
+function setCssProperty(block, property, value) {
+    const pattern = new RegExp(`(${escapeRegExp(property)}\\s*:\\s*)[^;]+;`, 'i');
+    if (pattern.test(block)) return block.replace(pattern, `$1${value};`);
+    return block.replace(/\n\}/, `\n  ${property}: ${value};\n}`);
+}
+
+function replaceCssRuleBlock(code, selectorPattern, updater) {
+    const pattern = new RegExp(`(${selectorPattern}\\s*\\{[\\s\\S]*?\\n\\})`, 'g');
+    return String(code || '').replace(pattern, block => updater(block));
+}
+
+function getLabelIconSize(element) {
+    const fallback = Math.max(64, clampNumber(element?.labelSize || 16, 10, 48) * 4);
+    return clampNumber(element?.labelIconSize ?? fallback, 24, 260);
+}
+
+function restoreLabelStyleRules(code, elements) {
+    let next = String(code || '');
+    (elements || []).forEach(element => {
+        if (!element || typeof element !== 'object') return;
+        const className = escapeRegExp(cssClassForElement(element));
+        const baseSelector = `\\.clip-div\\.${className}\\s*>\\s*`;
+        const labelColor = normalizeHexColor(element.labelColor, '#f8fbff');
+        const labelSize = `${formatNumber(clampNumber(element.labelSize || 16, 8, 96))}px`;
+        const extraColor = normalizeHexColor(element.labelExtraColor, labelColor);
+        const extraSize = `${formatNumber(clampNumber(element.labelExtraSize || 13, 8, 72))}px`;
+        const iconColor = normalizeHexColor(element.labelIconColor, labelColor);
+        const iconSize = `${formatNumber(getLabelIconSize(element))}px`;
+        const iconOpacity = formatNumber(clampNumber(element.labelIconOpacity ?? 22, 0, 100) / 100);
+        const labelWeight = element.labelBold === false ? '500' : '800';
+        const extraWeight = element.labelExtraBold ? '800' : '650';
+
+        next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label-bg-icon`, block => {
+            let updated = setCssProperty(block, 'color', iconColor);
+            updated = setCssProperty(updated, 'font-size', iconSize);
+            return setCssProperty(updated, 'opacity', iconOpacity);
+        });
+        next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label`, block => {
+            let updated = setCssProperty(block, 'color', labelColor);
+            return setCssProperty(updated, 'font-size', labelSize);
+        });
+        next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label\\s*>\\s*\\.clip-label-main`, block => {
+            let updated = setCssProperty(block, 'color', labelColor);
+            updated = setCssProperty(updated, 'font-size', labelSize);
+            return setCssProperty(updated, 'font-weight', labelWeight);
+        });
+        next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label\\s*>\\s*\\.clip-label-extra`, block => {
+            let updated = setCssProperty(block, 'color', extraColor);
+            updated = setCssProperty(updated, 'font-size', extraSize);
+            return setCssProperty(updated, 'font-weight', extraWeight);
+        });
+    });
+    return next;
+}
+
+function restoreChildLayeringRules(code, elements) {
+    let next = String(code || '');
+    (elements || [])
+        .filter(element => element?.parentId)
+        .forEach(element => {
+            next = replaceCssRuleBlock(next, `\\.clip-div\\.${escapeRegExp(cssClassForElement(element))}`, block => (
+                setCssProperty(block, 'z-index', '5')
+            ));
+        });
+    return next;
+}
+
+function restoreTransparentChildRules(code, elements) {
+    let next = String(code || '');
+    (elements || [])
+        .filter(element => element?.parentId && getEffectiveChildFillMode(element) === 'transparent')
+        .forEach(element => {
+            const className = cssClassForElement(element);
+            const escapedClassName = escapeRegExp(className);
+            const parent = (elements || []).find(item => item?.id === element.parentId);
+            const parentClassName = parent ? cssClassForElement(parent) : '';
+
+            next = replaceCssRuleBlock(next, `\\.clip-div\\.${escapedClassName}::before`, block => {
+                let updated = block
+                    .replace(/\n\s*background-color:\s*[^;]+;/gi, '')
+                    .replace(/\n\s*background-image:\s*[^;]+;/gi, '');
+                updated = setCssProperty(updated, 'background', 'transparent');
+                return setCssProperty(updated, 'opacity', '0');
+            });
+
+            if (!parentClassName) return;
+            const overlayClassName = `clip-mask-child-color-${className}`;
+            next = replaceCssRuleBlock(next, `\\.clip-div\\.${escapeRegExp(parentClassName)}\\s*>\\s*\\.${escapeRegExp(overlayClassName)}`, block => {
+                let updated = setCssProperty(block, 'display', 'none');
+                updated = setCssProperty(updated, 'background-color', 'transparent');
+                updated = setCssProperty(updated, 'background-image', 'none');
+                return setCssProperty(updated, 'opacity', '0');
+            });
+        });
+    return next;
+}
+
 function readArenaModelTemplates() {
     if (arenaModelTemplatesCache) return arenaModelTemplatesCache;
     try {
@@ -143,22 +292,28 @@ function writeArenaModelTemplates(templates) {
 
 function sanitizeArenaModelForTemplate(model) {
     if (!model || typeof model !== 'object') return model;
-    if (sanitizedModelCache.has(model)) return sanitizedModelCache.get(model);
     const copy = typeof structuredClone === 'function'
         ? structuredClone(model)
         : JSON.parse(JSON.stringify(model));
+    copy.app = copy.app || 'arena-card-model';
+    copy.version = Math.max(2, Number(copy.version || 1));
+    copy.schemaVersion = Math.max(2, Number(copy.schemaVersion || copy.version || 1));
+    copy.renderHints = {
+        dynamicCardImage: true,
+        cardImageVariable: '--arena-card-image',
+        childImageMasks: true,
+        scopedCssInSheet: true,
+        ...(copy.renderHints && typeof copy.renderHints === 'object' ? copy.renderHints : {})
+    };
 
-    const modelColors = new Set();
     const cardImageBackgrounds = new Set();
     const sourceRootId = copy.sourceRootId || '';
     if (Array.isArray(copy.elements)) {
         copy.elements.forEach(element => {
             if (!element || typeof element !== 'object') return;
-            ['colorA', 'colorB', 'parentBgColor', 'effectColor'].forEach(key => {
-                const value = String(element[key] || '').trim();
-                if (/^#[0-9a-f]{3,8}$/i.test(value)) modelColors.add(value);
-            });
             if (shouldUseCardImageForElement(element, sourceRootId)) {
+                element.usesArenaCardImage = true;
+                element.cardImageSource = 'card';
                 if (element.backgroundImage) cardImageBackgrounds.add(element.backgroundImage);
                 element.backgroundImage = '';
                 element.backgroundImageName = '';
@@ -169,15 +324,14 @@ function sanitizeArenaModelForTemplate(model) {
     ['generatedCode', 'html', 'code'].forEach(key => {
         if (typeof copy[key] === 'string') {
             copy[key] = replaceSpecificBackgroundImagesInCode(copy[key], cardImageBackgrounds, 'var(--arena-card-image, none)');
-            modelColors.forEach(color => {
-                copy[key] = copy[key].replace(new RegExp(color.replace('#', '\\#'), 'gi'), 'var(--arena-card-color, #0d9488)');
-            });
             copy[key] = replaceSolidChildColorRules(copy[key], copy.elements);
             copy[key] = replaceGradientChildColorRules(copy[key], copy.elements);
+            copy[key] = restoreTransparentChildRules(copy[key], copy.elements);
+            copy[key] = restoreChildLayeringRules(copy[key], copy.elements);
+            copy[key] = restoreLabelStyleRules(copy[key], copy.elements);
         }
     });
 
-    sanitizedModelCache.set(model, copy);
     return copy;
 }
 
@@ -302,28 +456,67 @@ function arrayBufferToBase64(buffer) {
     return btoa(binary);
 }
 
-function getCardImageUrl(cardData) {
-    const image = cardData?.image || cardData?.backgroundImage;
-    const mimeType = cardData?.imageMimeType || cardData?.backgroundMimeType || 'image/png';
-    if (!image) return '';
-    if (typeof image === 'string') {
-        if (image.startsWith('data:') || image.startsWith('blob:') || image.startsWith('http')) return image;
-        return `data:${mimeType};base64,${image}`;
+function rawImageToUrl(raw, mimeType = 'image/png') {
+    if (!raw) return '';
+    if (typeof raw === 'string') {
+        const value = raw.trim();
+        if (!value) return '';
+        if (value.startsWith('data:') || value.startsWith('blob:') || /^https?:\/\//i.test(value)) return value;
+        if (/^[a-z0-9+/=\s]+$/i.test(value) && value.length > 32) {
+            return `data:${mimeType || 'image/png'};base64,${value.replace(/\s+/g, '')}`;
+        }
+        return '';
     }
+    if (typeof Blob !== 'undefined' && raw instanceof Blob) {
+        try { return URL.createObjectURL(raw); } catch (error) { return ''; }
+    }
+    if (raw && typeof raw === 'object' && !(raw instanceof ArrayBuffer) && !ArrayBuffer.isView(raw)) {
+        const nestedMime = raw.mimeType || raw.type || raw.contentType || mimeType;
+        const nested = raw.dataUrl || raw.dataURL || raw.src || raw.url || raw.base64 || raw.data || raw.buffer || raw.value;
+        if (nested && nested !== raw) return rawImageToUrl(nested, nestedMime);
+    }
+    const base64 = arrayBufferToBase64(raw);
+    return base64 ? `data:${mimeType || 'image/png'};base64,${base64}` : '';
+}
 
-    const bytes = image instanceof ArrayBuffer
-        ? new Uint8Array(image)
-        : ArrayBuffer.isView(image)
-            ? new Uint8Array(image.buffer, image.byteOffset, image.byteLength)
-            : null;
-    if (!bytes) return '';
-
-    const cacheKey = `${cardData?.id || 'card'}:${mimeType}:${bytes.byteLength}`;
-    if (cardImageUrlCache.has(cacheKey)) return cardImageUrlCache.get(cacheKey);
-    const blob = new Blob([bytes], { type: mimeType });
-    const url = URL.createObjectURL(blob);
-    cardImageUrlCache.set(cacheKey, url);
-    return url;
+function getCardImageUrl(cardData) {
+    if (!cardData) return '';
+    const entries = [
+        ['image', cardData.imageMimeType || cardData.mimeType || cardData.type],
+        ['imageData', cardData.imageDataMimeType || cardData.imageMimeType],
+        ['imageBase64', cardData.imageMimeType],
+        ['imageUrl', cardData.imageMimeType],
+        ['imageSrc', cardData.imageMimeType],
+        ['cardImage', cardData.cardImageMimeType || cardData.imageMimeType],
+        ['cardImageData', cardData.cardImageMimeType || cardData.imageMimeType],
+        ['coverImage', cardData.coverImageMimeType || cardData.imageMimeType],
+        ['thumbnail', cardData.thumbnailMimeType || cardData.imageMimeType],
+        ['thumb', cardData.thumbnailMimeType || cardData.imageMimeType],
+        ['backgroundImage', cardData.backgroundMimeType || cardData.backgroundImageMimeType],
+        ['backgroundImageData', cardData.backgroundMimeType || cardData.backgroundImageMimeType],
+        ['enhanceImage', cardData.enhanceImageMimeType],
+        ['trueImage', cardData.trueImageMimeType]
+    ];
+    for (const [key, mimeType] of entries) {
+        const raw = cardData[key];
+        if (!raw) continue;
+        const bytes = raw instanceof ArrayBuffer
+            ? new Uint8Array(raw)
+            : ArrayBuffer.isView(raw)
+                ? new Uint8Array(raw.buffer, raw.byteOffset, raw.byteLength)
+                : null;
+        if (bytes && typeof Blob !== 'undefined') {
+            const type = mimeType || 'image/png';
+            const cacheKey = `${cardData?.id || 'card'}:${key}:${type}:${bytes.byteLength}`;
+            if (cardImageUrlCache.has(cacheKey)) return cardImageUrlCache.get(cacheKey);
+            const url = URL.createObjectURL(new Blob([bytes], { type }));
+            cardImageUrlCache.set(cacheKey, url);
+            return url;
+        }
+        const url = rawImageToUrl(raw, mimeType || 'image/png');
+        if (url) return url;
+    }
+    return '';
 }
 
 function getCardColorVars(cardData) {
@@ -380,12 +573,42 @@ function cssUrl(value) {
     return `url(${safeValue})`;
 }
 
-function hydrateArenaModelCode(code, cardData) {
+function scopeCssSelectorList(selectorText, scopeSelector) {
+    return String(selectorText || '')
+        .split(',')
+        .map(selector => {
+            const trimmed = selector.trim();
+            if (!trimmed) return '';
+            if (trimmed.startsWith(scopeSelector)) return trimmed;
+            if (/^(from|to|\d+(?:\.\d+)?%)$/i.test(trimmed)) return trimmed;
+            return `${scopeSelector} ${trimmed}`;
+        })
+        .filter(Boolean)
+        .join(', ');
+}
+
+function scopeArenaModelCss(css, scopeSelector) {
+    return String(css || '').replace(/(^|})\s*([^{}@][^{}]*)\{/g, (match, close, selectors) => {
+        const selectorText = String(selectors || '').trim();
+        if (!selectorText) return match;
+        return `${close}\n${scopeCssSelectorList(selectorText, scopeSelector)} {`;
+    });
+}
+
+function hydrateArenaModelCode(code, cardData, scopeId = '') {
     if (!code || typeof document === 'undefined') return code || '';
-    const cardImageUrl = getCardImageUrl(cardData);
 
     const template = document.createElement('template');
     template.innerHTML = code;
+    const scopeSelector = scopeId ? `#${scopeId}` : '';
+    if (scopeSelector) {
+        template.content.querySelectorAll('style').forEach(style => {
+            style.textContent = scopeArenaModelCss(style.textContent || '', scopeSelector);
+        });
+        template.content.querySelectorAll('.clip-stage').forEach(stage => {
+            stage.setAttribute('data-arena-model-scope', scopeId);
+        });
+    }
     template.content.querySelectorAll('[data-card-field]').forEach(node => {
         const key = node.getAttribute('data-card-field') || '';
         const value = getCardFieldValue(cardData, key);
@@ -434,17 +657,17 @@ function resolveArenaModelSize(model, options = {}) {
 
 function renderArenaModelHtml(cardData, options = {}) {
     const model = getArenaModel(cardData);
-    const code = hydrateArenaModelCode(model?.generatedCode || model?.html || model?.code || '', cardData);
+    const uniqueId = `arena-model-${safeDomId(cardData?.id || cardData?.name || cardData?.title)}-${Math.random().toString(36).slice(2, 7)}`;
+    const code = hydrateArenaModelCode(model?.generatedCode || model?.html || model?.code || '', cardData, uniqueId);
     const { modelW, modelH, finalWidth, finalHeight } = resolveArenaModelSize(model, options);
     const scale = Math.min(finalWidth / modelW, finalHeight / modelH);
-    const uniqueId = `arena-model-${cardData?.id || Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const cardImageUrl = getCardImageUrl(cardData);
     const cardColors = getCardColorVars(cardData);
     const imageVar = cardImageUrl ? `--arena-card-image: ${cssUrl(cardImageUrl)};` : '--arena-card-image: none;';
     const colorVars = `--arena-card-color: ${cardColors.color}; --arena-card-color-light: ${cardColors.light}; --arena-card-color-soft: ${cardColors.soft}; --arena-card-color-light-soft: ${cardColors.lightSoft};`;
 
     return `
-        <div id="${uniqueId}" class="arena-model-card w-full h-full relative text-white" style="${imageVar} ${colorVars} transform-origin: top left; width: ${finalWidth}px; height: ${finalHeight}px; margin: 0 auto; background: transparent; overflow: visible;">
+        <div id="${uniqueId}" class="arena-model-card w-full h-full relative text-white" data-arena-image="${cardImageUrl ? 'ready' : 'missing'}" data-arena-model-version="${model?.schemaVersion || model?.version || 1}" style="${imageVar} ${colorVars} transform-origin: top left; width: ${finalWidth}px; height: ${finalHeight}px; margin: 0 auto; background: transparent; overflow: visible;">
             <div class="arena-model-card__scale" style="width:${modelW}px; height:${modelH}px; transform: scale(${scale}); transform-origin: top left;">
                 ${code}
             </div>

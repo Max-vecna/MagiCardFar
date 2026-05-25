@@ -536,25 +536,6 @@ export async function populateCharacterSelect(selectId, includeNoneOption = true
     }
 }
 
-function updateRelationshipFanLayout() {
-    const container = document.getElementById('selected-relationships-container');
-    if (!container) return;
-
-    const cards = Array.from(container.querySelectorAll('.character-form-mini-card.related-character-grid-item'));
-    const centerIndex = (cards.length - 1) / 2;
-
-    cards.forEach((card, index) => {
-        const distanceFromCenter = index - centerIndex;
-        const rotation = distanceFromCenter * 5.5;
-        const offsetY = Math.abs(distanceFromCenter) * 8;
-        const layer = Math.max(1, Math.round((cards.length - Math.abs(distanceFromCenter)) * 10));
-
-        card.style.setProperty('--fan-rotate', `${rotation}deg`);
-        card.style.setProperty('--fan-offset-y', `${offsetY}px`);
-        card.style.setProperty('--fan-z', String(layer));
-    });
-}
-
 async function createSelectedElement(data, type) {
     let containerId;
     let iconClass;
@@ -615,10 +596,8 @@ async function createSelectedElement(data, type) {
             e.stopPropagation();
             if (!await showCustomConfirm('Remover este card do personagem?')) return;
             itemElement.remove();
-            if (type === 'relationship') updateRelationshipFanLayout();
         });
         container.appendChild(itemElement);
-        if (type === 'relationship') updateRelationshipFanLayout();
         return;
     }
 

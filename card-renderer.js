@@ -1252,12 +1252,9 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
     const collectionTabs = Array.from(sheetContainer.querySelectorAll('.character-collection-tab'));
     const collectionTriggers = Array.from(sheetContainer.querySelectorAll('.character-collection-trigger'));
 
-    const renderCollectionMiniCard = async (config, item, index, totalItems) => {
+    const renderCollectionMiniCard = async (config, item) => {
         let miniSheetHtml = '';
         let wrapperClass = 'related-spell-grid-item';
-        let fanStyle = '';
-        let relatedStackHtml = '';
-        let hasRelatedStack = false;
         const showMiniCardCaption = config.key === 'spells';
         const miniCardCaption = escapeHtml(item.name || item.title || 'Magia');
 
@@ -1277,44 +1274,12 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
             miniSheetHtml = await renderFullSpellSheet(item, false);
         }
 
-        if (config.key === 'relationships') {
-            const centerIndex = (totalItems - 1) / 2;
-            const distanceFromCenter = index - centerIndex;
-            const fanRotation = (distanceFromCenter * 5.5).toFixed(2);
-            const fanOffsetY = (Math.abs(distanceFromCenter) * 8).toFixed(2);
-            const fanLayer = Math.max(1, Math.round((totalItems - Math.abs(distanceFromCenter)) * 10));
-            fanStyle = ` style="--fan-rotate: ${fanRotation}deg; --fan-offset-y: ${fanOffsetY}px; --fan-z: ${fanLayer};"`;
-        } else if (['spells', 'skills', 'attacks', 'items'].includes(config.key)) {
-            const relatedStoreName = config.key === 'items' ? 'rpgItems' : 'rpgEffects';
-            const relatedIds = [item.enhanceCardId, item.trueCardId].filter(Boolean);
-            const relatedCards = (await Promise.all(relatedIds.map(id => getData(relatedStoreName, id)))).filter(Boolean);
-
-            if (relatedCards.length > 0) {
-                hasRelatedStack = true;
-                miniSheetHtml = `<div class="related-card-stack-layer related-card-stack-layer-base">${miniSheetHtml}</div>`;
-                relatedStackHtml = (await Promise.all(relatedCards.map(async (related, relatedIndex) => {
-                    let relatedHtml = '';
-
-                    if (config.type === 'item') {
-                        relatedHtml = await renderFullItemSheet(related, false);
-                    } else if (config.type === 'attack') {
-                        relatedHtml = await renderFullAttackSheet(related, false);
-                    } else {
-                        relatedHtml = await renderFullSpellSheet(related, false);
-                    }
-
-                    return `<div class="related-card-stack-layer related-card-stack-layer-${relatedIndex + 1}">${relatedHtml}</div>`;
-                }))).join('');
-            }
-        }
-
         return `
             <div
-                class="character-collection-mini-card ${wrapperClass}${hasRelatedStack ? ' has-related-stack' : ''}${showMiniCardCaption ? ' has-mini-card-caption' : ''}"
+                class="character-collection-mini-card ${wrapperClass}${showMiniCardCaption ? ' has-mini-card-caption' : ''}"
                 data-collection-key="${config.key}"
-                data-item-id="${item.id}"${fanStyle}>
+                data-item-id="${item.id}">
                 ${miniSheetHtml}
-                ${relatedStackHtml}
                 ${showMiniCardCaption ? `<div class="character-collection-mini-card__caption" title="${miniCardCaption}">${miniCardCaption}</div>` : ''}
             </div>
         `;
@@ -1340,16 +1305,8 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
                     item.style.height = `${scaledHeight + captionHeight}px`;
                     item.style.position = 'relative';
 
-                    const stackedSheets = item.querySelectorAll('.related-card-stack-layer > div');
-                    if (stackedSheets.length > 0) {
-                        stackedSheets.forEach(stackedSheet => {
-                            stackedSheet.style.transform = `scale(${scale})`;
-                            stackedSheet.style.transformOrigin = 'top left';
-                        });
-                    } else {
-                        sheet.style.transform = `scale(${scale})`;
-                        sheet.style.transformOrigin = 'top left';
-                    }
+                    sheet.style.transform = `scale(${scale})`;
+                    sheet.style.transformOrigin = 'top left';
                 }
             });
         };

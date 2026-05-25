@@ -1,23 +1,10 @@
 import { bufferToBlob } from './ui_utils.js';
 import { hasArenaModel, renderArenaModelSheet } from './arena_model_renderer.js';
-
-async function getRelatedSpellCards(spellData) {
-    const { getData } = await import('./local_db.js');
-    const relationIds = [
-        { role: 'base', label: 'Base', id: spellData.id },
-        { role: 'enhance', label: 'Aprimorar', id: spellData.enhanceCardId },
-        { role: 'true', label: 'Verdadeiro', id: spellData.trueCardId }
-    ];
-
-    const cards = await Promise.all(relationIds.map(async relation => {
-        if (relation.role === 'base') return { ...relation, card: spellData };
-        if (!relation.id) return null;
-        const card = await getData('rpgEffects', relation.id);
-        return card ? { ...relation, card } : null;
-    }));
-
-    return cards.filter(Boolean);
-}
+import {
+    buildRelatedCardCarousel,
+    getRelatedCardGroup,
+    setupRelatedCardCarousel
+} from './related_card_carousel.js';
 
 function resolveSpellCardSize(aspectRatio, options = {}) {
     if (Number(options.cardWidth) > 0 && Number(options.cardHeight) > 0) {
@@ -42,29 +29,6 @@ function resolveSpellCardSize(aspectRatio, options = {}) {
     return {
         finalWidth,
         finalHeight: finalWidth / aspectRatio
-    };
-}
-
-function getInlineRelatedLayout(cardCount, aspectRatio) {
-    if (cardCount <= 1 || window.innerWidth < 900) return null;
-
-    const gap = 18;
-    const maxWidth = window.innerWidth * 0.94;
-    const maxHeight = window.innerHeight * 0.86;
-    let cardWidth = (maxWidth - (gap * (cardCount - 1))) / cardCount;
-    let cardHeight = cardWidth / aspectRatio;
-
-    if (cardHeight > maxHeight) {
-        cardHeight = maxHeight;
-        cardWidth = cardHeight * aspectRatio;
-    }
-
-    if (cardWidth < 300) return null;
-
-    return {
-        cardWidth: Math.floor(cardWidth),
-        cardHeight: Math.floor(cardHeight),
-        gap
     };
 }
 
@@ -179,7 +143,66 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
     const sheetContainer = document.getElementById('spell-sheet-container');
     if (!sheetContainer) return;
 
+    const aspectRatio = 9 / 16;
+    const { finalWidth, finalHeight } = resolveSpellCardSize(aspectRatio, options);
+    const uniqueId = `spell-${spellData.id}-${Date.now()}`;
+
     if (hasArenaModel(spellData)) {
+        if (!isModal) {
+            return renderArenaModelSheet(spellData, false, {
+                ...options,
+                containerId: 'spell-sheet-container'
+            });
+        }
+
+        const { cards: relatedCards, activeIndex } = await getRelatedCardGroup(spellData, 'rpgEffects');
+        if (relatedCards.length > 1) {
+            const index = document.getElementsByClassName('visible').length;
+            sheetContainer.style.zIndex = 100000000 + index;
+            sheetContainer.innerHTML = await buildRelatedCardCarousel({
+                relatedCards,
+                activeIndex,
+                width: finalWidth,
+                height: finalHeight,
+                closeButtonHtml: `
+                    <button id="close-spell-sheet-btn-${uniqueId}" class="absolute top-4 right-4 bg-red-600 hover:text-white z-50 thumb-btn" style="display:block;">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                `,
+                renderCard: card => renderFullSpellSheet(card, false, {
+                    cardWidth: finalWidth,
+                    cardHeight: finalHeight
+                })
+            });
+
+            sheetContainer.style.backgroundImage = `url(icons/fundo.svg)`;
+            sheetContainer.style.backgroundSize = 'cover';
+            sheetContainer.style.backgroundPosition = 'center';
+            sheetContainer.classList.remove('hidden');
+            setTimeout(() => sheetContainer.classList.add('visible'), 10);
+            setupRelatedCardCarousel(sheetContainer);
+
+            const closeSheet = () => {
+                sheetContainer.classList.remove('visible');
+                const handler = () => {
+                    sheetContainer.classList.add('hidden');
+                    sheetContainer.innerHTML = '';
+                    sheetContainer.removeEventListener('transitionend', handler);
+                };
+                sheetContainer.addEventListener('transitionend', handler);
+            };
+
+            sheetContainer.querySelector(`#close-spell-sheet-btn-${uniqueId}`)?.addEventListener('click', closeSheet);
+            const overlayHandler = (event) => {
+                if (event.target === sheetContainer) {
+                    closeSheet();
+                    sheetContainer.removeEventListener('click', overlayHandler);
+                }
+            };
+            sheetContainer.addEventListener('click', overlayHandler);
+            return;
+        }
+
         return renderArenaModelSheet(spellData, isModal, {
             ...options,
             containerId: 'spell-sheet-container'
@@ -191,32 +214,17 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
         sheetContainer.style.zIndex = 100000000 + index;
     }
 
-    const aspectRatio = 9 / 16;
-    const { finalWidth, finalHeight } = resolveSpellCardSize(aspectRatio, options);
-
     let mainImageUrl;
     let createdMainObjectUrl = null;
+    const objectUrlCollector = Array.isArray(options.objectUrls) ? options.objectUrls : null;
     const typeLabel = spellData.type === 'ataque' ? 'Ataque' : (spellData.type === 'habilidade' ? 'Habilidade' : 'Magia');
 
     if (spellData.image) {
         createdMainObjectUrl = URL.createObjectURL(bufferToBlob(spellData.image, spellData.imageMimeType));
+        if (objectUrlCollector) objectUrlCollector.push(createdMainObjectUrl);
         mainImageUrl = createdMainObjectUrl;
     } else {
         mainImageUrl = `https://placehold.co/400x400/00796B/B2DFDB?text=${encodeURIComponent(typeLabel)}`;
-    }
-
-    let enhanceImageUrl = null;
-    let createdEnhanceObjectUrl = null;
-    if (spellData.enhanceImage) {
-        createdEnhanceObjectUrl = URL.createObjectURL(bufferToBlob(spellData.enhanceImage, spellData.enhanceImageMimeType));
-        enhanceImageUrl = createdEnhanceObjectUrl;
-    }
-
-    let trueImageUrl = null;
-    let createdTrueObjectUrl = null;
-    if (spellData.trueImage) {
-        createdTrueObjectUrl = URL.createObjectURL(bufferToBlob(spellData.trueImage, spellData.trueImageMimeType));
-        trueImageUrl = createdTrueObjectUrl;
     }
 
     const defaultColor = spellData.type === 'ataque'
@@ -228,28 +236,6 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
     spellData.aumentos = Array.isArray(spellData.aumentos)
         ? spellData.aumentos.filter(a => (a?.tipo || 'fixo') === 'fixo')
         : [];
-    
-    let aumentosHtml = '';
-    if (spellData.aumentos && spellData.aumentos.length > 0) {
-        const aumentosFixos = spellData.aumentos.filter(a => (a?.tipo || 'fixo') === 'fixo');
-        const createList = (list, title, color) => {
-            if (list.length === 0) return '';
-            const items = list.map(a => `<li><span class="font-semibold">${escapeHtml(a.nome)}:</span> ${a.valor > 0 ? '+' : ''}${escapeHtml(a.valor)}</li>`).join('');
-            return `<div class="mb-2"><h5 class="font-bold text-sm ${color}">${escapeHtml(title)}</h5><ul class="list-disc list-inside text-xs">${items}</ul></div>`;
-        };
-        
-        aumentosHtml = `
-            <div class="pt-2 scroll-section" data-bg-type="main">
-                <h3 class="text-sm font-semibold flex items-center gap-2">Aumentos</h3>
-                <div class="text-gray-300 text-xs leading-relaxed mt-1 space-y-1">
-                    ${createList(aumentosFixos, 'Bônus Fixos', 'text-green-300')}
-                    ${''}
-                </div>
-            </div>
-        `;
-    }
-
-    const uniqueId = `spell-${spellData.id}-${Date.now()}`;
     const fixedBonusInfo = spellData.aumentos.map(aumento => ({
         key: 'bonus',
         label: aumento.nome || 'Bonus',
@@ -337,44 +323,25 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
 
     if (!isModal) return sheetHtml;
 
-    const relatedCards = await getRelatedSpellCards(spellData);
+    const { cards: relatedCards, activeIndex } = await getRelatedCardGroup(spellData, 'rpgEffects');
+    const carouselObjectUrls = [];
     if (relatedCards.length > 1) {
-        const inlineLayout = getInlineRelatedLayout(relatedCards.length, aspectRatio);
-        const relatedCardWidth = inlineLayout?.cardWidth || finalWidth;
-        const relatedCardHeight = inlineLayout?.cardHeight || finalHeight;
-        const carouselClass = `spell-carousel-shell${inlineLayout ? ' spell-carousel-shell--inline' : ''}`;
-        const carouselStyle = inlineLayout
-            ? `width: ${relatedCardWidth * relatedCards.length + inlineLayout.gap * (relatedCards.length - 1)}px; height: ${relatedCardHeight}px; --spell-carousel-gap: ${inlineLayout.gap}px; --spell-related-card-width: ${relatedCardWidth}px;`
-            : `width: ${finalWidth}px; height: ${finalHeight}px;`;
-
-        const slidesHtml = (await Promise.all(relatedCards.map(async (relation, index) => {
-            const cardHtml = await renderFullSpellSheet(relation.card, false, {
-                cardWidth: relatedCardWidth,
-                cardHeight: relatedCardHeight
-            });
-            return `
-                <div class="spell-carousel-slide${index === 0 ? ' active' : ''}" data-slide-index="${index}">
-                    <div class="spell-carousel-label">${escapeHtml(relation.label)}</div>
-                    ${cardHtml}
-                </div>
-            `;
-        }))).join('');
-
-        sheetContainer.innerHTML = `
-            <button id="close-spell-sheet-btn-${uniqueId}" class="absolute top-4 right-4 bg-red-600 hover:text-white z-50 thumb-btn" style="display:block;">
-                <i class="fa-solid fa-xmark"></i>
-            </button>
-            <div class="${carouselClass}" style="${carouselStyle}">
-                ${inlineLayout ? '' : '<button type="button" class="spell-carousel-nav prev" aria-label="Card anterior"><i class="fas fa-chevron-left"></i></button>'}
-                <div class="spell-carousel-track">
-                    ${slidesHtml}
-                </div>
-                ${inlineLayout ? '' : '<button type="button" class="spell-carousel-nav next" aria-label="Proximo card"><i class="fas fa-chevron-right"></i></button>'}
-                ${inlineLayout ? '' : `<div class="spell-carousel-dots">
-                    ${relatedCards.map((relation, index) => `<button type="button" class="spell-carousel-dot${index === 0 ? ' active' : ''}" data-slide-index="${index}" aria-label="${escapeHtml(relation.label)}"></button>`).join('')}
-                </div>`}
-            </div>
-        `;
+        sheetContainer.innerHTML = await buildRelatedCardCarousel({
+            relatedCards,
+            activeIndex,
+            width: finalWidth,
+            height: finalHeight,
+            closeButtonHtml: `
+                <button id="close-spell-sheet-btn-${uniqueId}" class="absolute top-4 right-4 bg-red-600 hover:text-white z-50 thumb-btn" style="display:block;">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `,
+            renderCard: card => renderFullSpellSheet(card, false, {
+                cardWidth: finalWidth,
+                cardHeight: finalHeight,
+                objectUrls: carouselObjectUrls
+            })
+        });
     } else {
         sheetContainer.innerHTML = sheetHtml;
     }
@@ -391,82 +358,7 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
         sheetContainer.style.opacity = '1';
     }, 10);
 
-    setTimeout(() => {
-        const scrollContainer = document.getElementById(`spell-scroll-container-${uniqueId}`);
-        const bg1 = document.getElementById(`spell-bg-1-${uniqueId}`);
-        const bg2 = document.getElementById(`spell-bg-2-${uniqueId}`);
-        
-        let currentBgUrl = mainImageUrl;
-        let activeLayer = 1;
-
-        if (scrollContainer && bg1 && bg2) {
-            scrollContainer.addEventListener('scroll', () => {
-                const sections = scrollContainer.querySelectorAll('.scroll-section');
-                const containerRect = scrollContainer.getBoundingClientRect();
-                const triggerPoint = containerRect.top + (containerRect.height / 3);
-
-                let activeSection = null;
-                sections.forEach(section => {
-                    const rect = section.getBoundingClientRect();
-                    if (rect.top <= triggerPoint && rect.bottom >= triggerPoint) {
-                        activeSection = section;
-                    }
-                });
-
-                if (activeSection) {
-                    const bgType = activeSection.dataset.bgType;
-                    const sectionImage = activeSection.dataset.bgImage;
-                    
-                    let targetImage = mainImageUrl;
-                    if ((bgType === 'enhance' || bgType === 'true') && sectionImage) {
-                        targetImage = sectionImage;
-                    }
-
-                    if (targetImage !== currentBgUrl) {
-                        currentBgUrl = targetImage;
-                        if (activeLayer === 1) {
-                            bg2.style.backgroundImage = `url('${targetImage}')`;
-                            bg2.style.opacity = '1';
-                            bg1.style.opacity = '0';
-                            activeLayer = 2;
-                        } else {
-                            bg1.style.backgroundImage = `url('${targetImage}')`;
-                            bg1.style.opacity = '1';
-                            bg2.style.opacity = '0';
-                            activeLayer = 1;
-                        }
-                    }
-                }
-            });
-        }
-    }, 200);
-
-    const carousel = sheetContainer.querySelector('.spell-carousel-shell');
-    if (carousel) {
-        let activeIndex = 0;
-        const slides = Array.from(carousel.querySelectorAll('.spell-carousel-slide'));
-        const dots = Array.from(carousel.querySelectorAll('.spell-carousel-dot'));
-        const showSlide = (nextIndex) => {
-            activeIndex = (nextIndex + slides.length) % slides.length;
-            slides.forEach((slide, index) => slide.classList.toggle('active', index === activeIndex));
-            dots.forEach((dot, index) => dot.classList.toggle('active', index === activeIndex));
-        };
-
-        carousel.querySelector('.spell-carousel-nav.prev')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showSlide(activeIndex - 1);
-        });
-        carousel.querySelector('.spell-carousel-nav.next')?.addEventListener('click', (e) => {
-            e.stopPropagation();
-            showSlide(activeIndex + 1);
-        });
-        dots.forEach(dot => {
-            dot.addEventListener('click', (e) => {
-                e.stopPropagation();
-                showSlide(parseInt(dot.dataset.slideIndex, 10) || 0);
-            });
-        });
-    }
+    setupRelatedCardCarousel(sheetContainer);
 
     const closeSheet = () => {
         sheetContainer.classList.remove('visible');
@@ -474,9 +366,8 @@ export async function renderFullSpellSheet(spellData, isModal, options = {}) {
         const handler = () => {
             sheetContainer.classList.add('hidden');
             sheetContainer.innerHTML = '';
-            if (createdMainObjectUrl) URL.revokeObjectURL(createdMainObjectUrl);
-            if (createdEnhanceObjectUrl) URL.revokeObjectURL(createdEnhanceObjectUrl);
-            if (createdTrueObjectUrl) URL.revokeObjectURL(createdTrueObjectUrl);
+            if (createdMainObjectUrl && !objectUrlCollector) URL.revokeObjectURL(createdMainObjectUrl);
+            carouselObjectUrls.forEach(url => URL.revokeObjectURL(url));
             sheetContainer.removeEventListener('transitionend', handler);
         };
         sheetContainer.addEventListener('transitionend', handler);

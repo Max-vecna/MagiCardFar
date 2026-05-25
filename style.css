@@ -527,42 +527,6 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
   max-height: none;
 }
 
-.related-card-stack-layer {
-  position: absolute;
-  inset: 4px 3px 3px 3px;
-  z-index: 1;
-  pointer-events: none;
-  opacity: 0.92;
-  filter: drop-shadow(0 7px 12px rgba(0, 0, 0, 0.42));
-}
-
-.related-card-stack-layer > div {
-  transform-origin: top left !important;
-  will-change: transform;
-}
-
-.related-card-stack-layer-base {
-  inset: 0 8px 10px 0;
-  z-index: 3;
-  opacity: 1;
-  filter: drop-shadow(0 8px 14px rgba(0, 0, 0, 0.5));
-  transform: translate(-4px, 10px) rotate(-9deg) scale(0.7);
-}
-
-.related-card-stack-layer-1 {
-  inset: 2px 4px 8px 4px;
-  z-index: 2;
-  opacity: 0.95;
-  transform: translate(6px, 6px) rotate(0deg) scale(0.65);
-}
-
-.related-card-stack-layer-2 {
-  inset: 5px 0 4px 10px;
-  z-index: 1;
-  opacity: 0.84;
-  transform: translate(12px, 10px) rotate(9deg) scale(0.6);
-}
-
 .spell-relation-pill {
   display: flex;
   flex-direction: column;
@@ -628,10 +592,8 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
 .spell-carousel-shell {
   position: relative;
   margin: 0 auto;
-}
-
-.spell-carousel-shell--inline {
-  max-width: calc(100vw - 2rem);
+  max-height: 90vh;
+  outline: none;
 }
 
 .spell-carousel-track,
@@ -642,26 +604,30 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
 
 .spell-carousel-slide {
   display: none;
+  place-items: center;
 }
 
 .spell-carousel-slide.active {
-  display: block;
+  display: grid;
 }
 
 .spell-carousel-label {
   position: absolute;
   left: 50%;
-  top: -1rem;
+  top: 0.65rem;
   z-index: 60;
   transform: translateX(-50%);
   padding: 0.35rem 0.75rem;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.66);
   color: #fff;
   font-size: 0.72rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  pointer-events: none;
 }
 
 .spell-carousel-nav {
@@ -671,20 +637,28 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
   width: 2rem;
   height: 2rem;
   border-radius: 50%;
-  background: rgba(0, 0, 0, 0.62);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(0, 0, 0, 0.64);
   color: #fff;
   display: flex;
   align-items: center;
   justify-content: center;
   transform: translateY(-50%);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.32);
+  transition: background-color 0.16s ease, transform 0.16s ease;
+}
+
+.spell-carousel-nav:hover {
+  background: rgba(13, 148, 136, 0.78);
+  transform: translateY(-50%) scale(1.05);
 }
 
 .spell-carousel-nav.prev {
-  left: -2.75rem;
+  left: -2.5rem;
 }
 
 .spell-carousel-nav.next {
-  right: -2.75rem;
+  right: -2.5rem;
 }
 
 .spell-carousel-dots {
@@ -695,39 +669,23 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
   display: flex;
   gap: 0.45rem;
   transform: translateX(-50%);
+  padding: 0.25rem 0.4rem;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
 }
 
 .spell-carousel-dot {
   width: 0.5rem;
   height: 0.5rem;
   border-radius: 50%;
+  border: 0;
   background: rgba(255, 255, 255, 0.38);
+  transition: background-color 0.16s ease, transform 0.16s ease;
 }
 
 .spell-carousel-dot.active {
   background: #2dd4bf;
-}
-
-.spell-carousel-shell--inline .spell-carousel-track {
-  position: static;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spell-carousel-gap, 1rem);
-  width: 100%;
-  height: 100%;
-}
-
-.spell-carousel-shell--inline .spell-carousel-slide {
-  position: relative;
-  inset: auto;
-  display: block;
-  flex: 0 0 var(--spell-related-card-width);
-  width: var(--spell-related-card-width);
-  height: 100%;
-}
-
-.spell-carousel-shell--inline .spell-carousel-label {
-  top: 0.45rem;
+  transform: scale(1.2);
 }
 
 .sheet-side-rail {
@@ -2099,10 +2057,6 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
     display: block;
     flex-shrink: 0;
     box-shadow: 0 6px 18px rgba(0, 0, 0, 0.42) !important;
-}
-
-.character-collection-modal-grid .character-collection-mini-card.has-related-stack {
-    overflow: visible;
 }
 
 @media (max-width: 480px) {
