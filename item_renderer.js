@@ -96,6 +96,10 @@ function getInfoStatIcon(stat) {
     return stat.icon || INFO_STAT_ICON_BY_KEY[key] || INFO_STAT_ICON_BY_LABEL[label] || 'fa-gem';
 }
 
+function getSheetIconAccentColor(predominantColor) {
+    return predominantColor?.colorLight || predominantColor?.color100 || '#ffffff';
+}
+
 function renderSideDiceRail(stats, predominantColor) {
     const items = stats
         .map(stat => ({ ...stat, valueParts: getDiceValueParts(stat.value) }))
@@ -104,7 +108,7 @@ function renderSideDiceRail(stats, predominantColor) {
     if (items.length === 0) return '';
 
     return `
-        <div class="sheet-side-rail sheet-side-rail--left sheet-dice-rail" style="--sheet-accent: ${predominantColor.color100}; --sheet-panel-bg: ${predominantColor.color30};">
+        <div class="sheet-side-rail sheet-side-rail--left sheet-dice-rail" style="--sheet-accent: ${predominantColor.color100}; --sheet-icon-accent: ${getSheetIconAccentColor(predominantColor)}; --sheet-panel-bg: ${predominantColor.color30};">
             ${items.map(stat => `
                 <div class="sheet-dice-stat" title="${escapeHtml(stat.label)}">
                     <div class="sheet-dice-stat__icon">
@@ -126,7 +130,7 @@ function renderSideInfoRail(stats, predominantColor) {
     if (items.length === 0) return '';
 
     return `
-        <div class="sheet-side-rail sheet-side-rail--right sheet-info-rail" style="--sheet-accent: ${predominantColor.color100}; --sheet-panel-bg: ${predominantColor.color30};">
+        <div class="sheet-side-rail sheet-side-rail--right sheet-info-rail" style="--sheet-accent: ${predominantColor.color100}; --sheet-icon-accent: ${getSheetIconAccentColor(predominantColor)}; --sheet-panel-bg: ${predominantColor.color30};">
             ${items.map(stat => `
                 <div class="sheet-info-stat" title="${escapeHtml(`${stat.label}: ${stat.value}`)}">
                     <div class="sheet-info-stat__icon">

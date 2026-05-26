@@ -2,6 +2,118 @@ const ARENA_MODEL_TEMPLATE_STORAGE_KEY = 'arenaModelTemplates.v1';
 const cardImageUrlCache = new Map();
 let arenaModelTemplatesCache = null;
 
+const ARENA_TEMPLATE_TYPE_ALIASES = {
+    magia: 'magic',
+    magic: 'magic',
+    spell: 'magic',
+    rpgspells: 'magic',
+    item: 'item',
+    itens: 'item',
+    arma: 'item',
+    armadura: 'item',
+    rpgitems: 'item',
+    habilidade: 'skill',
+    skill: 'skill',
+    efeito: 'skill',
+    effect: 'skill',
+    rpgeffects: 'skill',
+    ataque: 'attack',
+    attack: 'attack',
+    rpgattacks: 'attack',
+    personagem: 'character',
+    character: 'character',
+    ficha: 'character',
+    rpgcards: 'character',
+    criatura: 'creature',
+    creature: 'creature',
+    monstro: 'creature'
+};
+
+const ARENA_STORE_TEMPLATE_KEYS = {
+    rpgeffects: 'skill',
+    rpgitems: 'item',
+    rpgcards: 'character',
+    rpgspells: 'magic',
+    rpgattacks: 'attack'
+};
+
+const ARENA_TEMPLATE_TYPE_LABELS = {
+    magic: 'Magia',
+    item: 'Item',
+    skill: 'Habilidade',
+    attack: 'Ataque',
+    character: 'Personagem',
+    creature: 'Criatura'
+};
+
+const ARENA_SHARED_LAYOUT_TEMPLATE_KEYS = ['magic', 'skill', 'attack'];
+
+const ARENA_SHARED_LAYOUT_FALLBACKS = {
+    magic: ['skill', 'attack'],
+    skill: ['magic', 'attack'],
+    attack: ['magic', 'skill']
+};
+
+const RECEIVER_ICON_CLASS_BY_TYPE = {
+    padrao: 'ra-cog',
+    default: 'ra-cog',
+    cog: 'ra-cog',
+    modificador: 'ra-wrench',
+    modificar: 'ra-wrench',
+    modifier: 'ra-wrench',
+    wrench: 'ra-wrench',
+    cura: 'ra-heart-bottle',
+    vida: 'ra-heart-bottle',
+    heal: 'ra-heart-bottle',
+    mana: 'ra-bottle-vapors',
+    restaurar: 'ra-bottle-vapors',
+    'restaurar-mana': 'ra-bottle-vapors'
+};
+
+const RECEIVER_ICON_CLASSES = new Set([
+    'ra-wrench',
+    'ra-cog',
+    'ra-heart-bottle',
+    'ra-bottle-vapors'
+]);
+
+function normalizeArenaTemplateKey(value) {
+    const key = String(value || '').trim().toLowerCase();
+    return ARENA_TEMPLATE_TYPE_ALIASES[key] || '';
+}
+
+function uniqueArenaTemplateKeys(values) {
+    const seen = new Set();
+    const keys = [];
+    (values || []).forEach(value => {
+        const key = normalizeArenaTemplateKey(value);
+        if (!key || seen.has(key)) return;
+        seen.add(key);
+        keys.push(key);
+    });
+    return keys;
+}
+
+function getDefaultCompatibleArenaTemplateKeys(key) {
+    const normalized = normalizeArenaTemplateKey(key);
+    if (!normalized) return [];
+    if (ARENA_SHARED_LAYOUT_TEMPLATE_KEYS.includes(normalized)) {
+        return [...ARENA_SHARED_LAYOUT_TEMPLATE_KEYS];
+    }
+    return [normalized];
+}
+
+function getCompatibleArenaTemplateKeys(model, key = '') {
+    const allowedKeys = getDefaultCompatibleArenaTemplateKeys(key);
+    if (allowedKeys.length <= 1) return allowedKeys;
+    return uniqueArenaTemplateKeys([
+        ...getDefaultCompatibleArenaTemplateKeys(key),
+        ...(Array.isArray(model?.compatibleTemplateTypes) ? model.compatibleTemplateTypes : []),
+        ...(Array.isArray(model?.templateTargets) ? model.templateTargets : []),
+        ...(Array.isArray(model?._arenaTemplateTargets) ? model._arenaTemplateTargets : [])
+    ]).filter(templateKey => allowedKeys.includes(templateKey));
+}
+
 function replaceBackgroundDataImageUrls(code, replacement) {
     return String(code || '').replace(
         /(background-image\s*:\s*)url\((['"]?)data:image\/[^,'")]+(?:;[^,'")]+)*,[^'")]+\2\)/gi,
@@ -25,6 +137,41 @@ function safeDomId(value) {
     return safeCssName(value || Date.now()).replace(/^[^a-z]+/, '') || 'card';
 }
 
+function normalizeReceiverIconClass(value) {
+    const key = String(value || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+    if (!key) return '';
+    const iconClass = key.startsWith('ra-') ? key : `ra-${key}`;
+    if (RECEIVER_ICON_CLASSES.has(iconClass)) return iconClass;
+    return RECEIVER_ICON_CLASS_BY_TYPE[key.replace(/^ra-/, '')] || '';
+}
+
+function getCardReceiverIconClass(cardData) {
+    return normalizeReceiverIconClass(
+        cardData?.receiverIconType
+        || cardData?.receiverIcon
+        || cardData?.iconReceiverType
+        || cardData?.iconType
+    );
+}
+
+function setRpgAwesomeIconClass(icon, iconClass) {
+    if (!icon?.classList || !iconClass) return;
+    Array.from(icon.classList).forEach(className => {
+        if (/^ra-[a-z0-9-]+$/.test(className)) icon.classList.remove(className);
+    });
+    icon.classList.add('ra', iconClass);
+}
+
+function applyReceiverIconClass(root, iconClass) {
+    if (!root || !iconClass) return;
+    root.querySelectorAll('[data-icon-receiver="1"]').forEach(node => {
+        const icons = node.matches?.('i')
+            ? [node]
+            : Array.from(node.querySelectorAll('i.ra, .ra'));
+        icons.forEach(icon => setRpgAwesomeIconClass(icon, iconClass));
+    });
+}
+
 function cssClassForElement(element) {
     return `clip-${safeCssName(element?.name)}-${safeCssName(element?.id)}`;
 }
@@ -36,6 +183,21 @@ function normalizeHexColor(value, fallback = '#0d9488') {
         return `#${raw.slice(1).split('').map(char => char + char).join('')}`;
     }
     return fallback;
+}
+
+function rgbToHex(r, g, b) {
+    return `#${[r, g, b].map(value => clampNumber(Math.round(value), 0, 255).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function lightenCssColor(value, amount = 0.38) {
+    const rgb = parseCssRgb(value);
+    if (!rgb) return normalizeHexColor(value, '');
+    const weight = clampNumber(amount, 0, 1);
+    return rgbToHex(
+        rgb.r + (255 - rgb.r) * weight,
+        rgb.g + (255 - rgb.g) * weight,
+        rgb.b + (255 - rgb.b) * weight
+    );
 }
 
 function replaceSpecificBackgroundImagesInCode(code, images, replacement) {
@@ -80,6 +242,11 @@ function getEffectiveChildFillMode(element) {
 
 function cardColorVar(fallback = '#0d9488') {
     return `var(--arena-card-color, ${normalizeHexColor(fallback, '#0d9488')})`;
+}
+
+function cardLightColorVar(fallback = '#5eead4') {
+    const lightFallback = lightenCssColor(fallback, 0.38) || normalizeHexColor(fallback, '#5eead4');
+    return `var(--arena-card-color-light, ${lightFallback})`;
 }
 
 function cardSoftColorVar(fallback, alpha, variableName) {
@@ -292,7 +459,7 @@ function restoreLabelStyleRules(code, elements) {
         const iconFallback = normalizeHexColor(element.labelIconColor, labelColor);
         const iconColor = hasCustomLabelIconColor(element)
             ? iconFallback
-            : (solidIconFallback ? cardColorVar(solidIconFallback) : cardColorVar(iconFallback));
+            : (solidIconFallback ? cardLightColorVar(solidIconFallback) : cardLightColorVar(iconFallback));
         const iconSize = `${formatNumber(getLabelIconSize(element))}px`;
         const iconOpacity = formatNumber((solidIconFallback ? 100 : clampNumber(element.labelIconOpacity ?? 22, 0, 100)) / 100);
         const iconFilter = buildLabelIconFilter(element, iconFallback);
@@ -454,36 +621,80 @@ function getArenaModel(cardData) {
 }
 
 function getArenaTemplateKey(cardData) {
-    const explicitType = String(cardData?._arenaTemplateType || '').toLowerCase();
+    const store = String(cardData?._arenaStoreName || '').toLowerCase();
+    const type = normalizeArenaTemplateKey(cardData?.type || cardData?.category);
+    const cardType = normalizeArenaTemplateKey(cardData?.cardType);
+
+    if (store === 'rpgeffects' && (type === 'attack' || type === 'magic' || type === 'skill')) return type;
+    if (store === 'rpgcards') return cardType === 'creature' ? 'creature' : 'character';
+    if (store === 'rpgitems') return 'item';
+    if (store === 'rpgspells') return 'magic';
+    if (store === 'rpgattacks') return 'attack';
+    if (type) return type;
+    if (cardType) return cardType;
+
+    const explicitType = normalizeArenaTemplateKey(
+        cardData?._arenaTemplateType
+        || cardData?.arenaModel?.templateType
+        || cardData?._arenaModel?.templateType
+        || cardData?.arenaModel?.kind
+        || cardData?._arenaModel?.kind
+    );
     if (explicitType) return explicitType;
 
-    const store = String(cardData?._arenaStoreName || '').toLowerCase();
-    const type = String(cardData?.type || cardData?.cardType || '').toLowerCase();
-
-    if (store === 'rpgitems' || type === 'item' || type === 'arma' || type === 'armadura') return 'item';
-    if (store === 'rpgcards') return cardData?.cardType === 'creature' ? 'creature' : 'character';
-    if (type === 'habilidade') return 'skill';
-    if (type === 'ataque') return 'attack';
-    if (type === 'magia') return 'magic';
-    if (cardData?.cardType === 'creature') return 'creature';
-    if (cardData?.cardType || cardData?.attributes) return 'character';
+    if (ARENA_STORE_TEMPLATE_KEYS[store]) return ARENA_STORE_TEMPLATE_KEYS[store];
+    if (cardData?.attributes || cardData?.lore) return cardData?.cardType === 'creature' ? 'creature' : 'character';
+    if (cardData?.charge || cardData?.prerequisite) return 'item';
     return '';
+}
+
+function templateSupportsArenaKey(template, key) {
+    if (!template || !key) return false;
+    const sourceKey = normalizeArenaTemplateKey(template?.sourceTemplateType || template?.templateType || template?.kind);
+    const compatibleKeys = getCompatibleArenaTemplateKeys(template, sourceKey || key);
+    return compatibleKeys.includes(key);
+}
+
+function findCompatibleArenaModelTemplate(templates, key) {
+    const fallbackKeys = ARENA_SHARED_LAYOUT_FALLBACKS[key] || [];
+    for (const fallbackKey of fallbackKeys) {
+        const template = templates[fallbackKey];
+        if (templateSupportsArenaKey(template, key)) return template;
+    }
+    for (const template of Object.values(templates || {})) {
+        if (templateSupportsArenaKey(template, key)) return template;
+    }
+    return null;
 }
 
 function getArenaModelTemplate(cardData) {
     const key = getArenaTemplateKey(cardData);
     if (!key) return null;
-    const template = readArenaModelTemplates()[key] || null;
+    const templates = readArenaModelTemplates();
+    const ownTemplate = templates[key];
+    const template = templateSupportsArenaKey(ownTemplate, key) ? ownTemplate : findCompatibleArenaModelTemplate(templates, key);
     return template ? sanitizeArenaModelForTemplate(template) : null;
 }
 
-export function saveArenaModelTemplateFromCard(cardData) {
+function tagArenaModelTemplateForKey(model, key) {
+    const normalizedKey = normalizeArenaTemplateKey(key);
+    if (!model || !normalizedKey) return model;
+    const copy = model && typeof model === 'object' ? { ...model } : model;
+    const sourceType = normalizeArenaTemplateKey(copy.sourceTemplateType || copy.templateType || copy.kind) || normalizedKey;
+    copy.sourceTemplateType = sourceType;
+    copy.templateType = normalizedKey;
+    copy.kind = ARENA_TEMPLATE_TYPE_LABELS[normalizedKey] || copy.kind || normalizedKey;
+    copy.compatibleTemplateTypes = getCompatibleArenaTemplateKeys(copy, sourceType);
+    return copy;
+}
+
+export function saveArenaModelTemplateFromCard(cardData, options = {}) {
     const model = cardData?.arenaModel || cardData?._arenaModel;
     if (!model?.generatedCode && !model?.html && !model?.code) return false;
-    const key = getArenaTemplateKey(cardData);
+    const key = normalizeArenaTemplateKey(options.templateType || options.targetTemplateType) || getArenaTemplateKey(cardData);
     if (!key) return false;
     const templates = readArenaModelTemplates();
-    templates[key] = sanitizeArenaModelForTemplate(model);
+    templates[key] = tagArenaModelTemplateForKey(sanitizeArenaModelForTemplate(model), key);
     writeArenaModelTemplates(templates);
     return true;
 }
@@ -491,7 +702,7 @@ export function saveArenaModelTemplateFromCard(cardData) {
 export async function seedArenaModelTemplatesFromLocalData() {
     try {
         const { getData } = await import('./local_db.js');
-        const stores = ['rpgEffects', 'rpgItems', 'rpgCards'];
+        const stores = ['rpgEffects', 'rpgItems', 'rpgCards', 'rpgSpells', 'rpgAttacks'];
         let saved = 0;
         for (const store of stores) {
             const records = await getData(store);
@@ -514,8 +725,26 @@ function getValueByPath(source, path) {
     }, source);
 }
 
+function normalizeDisplayValue(value) {
+    if (value === undefined || value === null) return '';
+    if (Array.isArray(value)) {
+        return value.map(item => normalizeDisplayValue(item)).filter(Boolean).join(', ');
+    }
+    if (typeof value === 'object') {
+        const preferredKeys = ['label', 'name', 'nome', 'title', 'value', 'valor', 'text', 'description', 'effect'];
+        for (const key of preferredKeys) {
+            if (Object.prototype.hasOwnProperty.call(value, key)) {
+                const nested = normalizeDisplayValue(value[key]);
+                if (nested) return nested;
+            }
+        }
+        return '';
+    }
+    return String(value).trim();
+}
+
 function valueHasText(value) {
-    return value !== undefined && value !== null && String(value).trim() !== '';
+    return normalizeDisplayValue(value) !== '';
 }
 
 function buildDescriptionText(cardData) {
@@ -525,34 +754,71 @@ function buildDescriptionText(cardData) {
         { label: 'Verdadeiro', value: getValueByPath(cardData, 'true'), hidden: Boolean(cardData?.trueCardId) }
     ].filter(section => !section.hidden && valueHasText(section.value));
 
-    return sections.map(section => `${section.label}\n${String(section.value).trim()}`).join('\n\n');
+    return sections.map(section => `${section.label}\n${normalizeDisplayValue(section.value)}`).join('\n\n');
+}
+
+function formatAumentoValue(aumento) {
+    if (!aumento || typeof aumento !== 'object') return normalizeDisplayValue(aumento);
+    const raw = aumento.valor ?? aumento.value;
+    const number = Number(raw);
+    if (!Number.isFinite(number) || number === 0) return normalizeDisplayValue(raw);
+    return `${number > 0 ? '+' : ''}${number}`;
 }
 
 function getCardFieldValue(cardData, key) {
     if (key === 'description' || key === 'effect') return buildDescriptionText(cardData);
+    const aumentoMatch = String(key || '').match(/^aumentos\.(\d+)$/);
+    if (aumentoMatch) return formatAumentoValue(cardData?.aumentos?.[Number(aumentoMatch[1])]);
 
     const aliases = {
         name: ['name', 'title'],
         title: ['title', 'name'],
         subTitle: ['subTitle', 'subtitle'],
-        type: ['type', 'cardType'],
+        subtitle: ['subtitle', 'subTitle'],
+        type: ['type', 'cardType', 'category'],
+        cardType: ['cardType', 'type'],
+        circle: ['circle', 'circulo'],
+        manaCost: ['manaCost', 'mana_cost', 'cost', 'custoMana', 'custo'],
+        execution: ['execution', 'execucao'],
+        range: ['range', 'alcance'],
+        target: ['target', 'alvo', 'area'],
+        duration: ['duration', 'duracao'],
+        resistencia: ['resistencia', 'resistance'],
+        resistance: ['resistance', 'resistencia'],
+        charge: ['charge', 'carga'],
+        prerequisite: ['prerequisite', 'preRequisito', 'pre-requisito', 'requisito'],
+        acerto: ['acerto', 'accuracy', 'attributes.acerto'],
+        critico: ['critico', 'critical', 'attributes.critico'],
+        dano: ['atk', 'attack', 'dano', 'damage', 'attributes.dano'],
+        damage: ['damage', 'atk', 'attack', 'dano', 'attributes.dano'],
+        danoSemMana: ['atkSemMana', 'attackSemMana', 'danoSemMana', 'damageNoMana', 'attributes.danoSemMana'],
+        vidaDado: ['vidaDado', 'lifeDie', 'hitDie'],
+        manaDado: ['manaDado', 'manaDie'],
+        level: ['level', 'nivel'],
+        dinheiro: ['dinheiro', 'money', 'gold'],
+        classe: ['classe', 'class'],
         vida: ['attributes.vida', 'vida'],
         vidaAtual: ['attributes.vidaAtual', 'vidaAtual'],
         mana: ['attributes.mana', 'mana'],
         manaAtual: ['attributes.manaAtual', 'manaAtual'],
-        description: ['description', 'effect']
+        description: ['description', 'effect'],
+        effect: ['effect', 'description'],
+        enhance: ['enhance'],
+        true: ['true'],
+        'lore.historia': ['lore.historia', 'historia'],
+        'lore.personalidade': ['lore.personalidade', 'personalidade'],
+        'lore.motivacao': ['lore.motivacao', 'motivacao']
     };
     const paths = aliases[key] || [key];
     for (const path of paths) {
         const value = getValueByPath(cardData, path);
-        if (valueHasText(value)) return value;
+        if (valueHasText(value)) return normalizeDisplayValue(value);
     }
     return '';
 }
 
 function normalizeCardTitleMetaValue(value) {
-    if (value === undefined || value === null) return '';
-    return String(value).trim().replace(/\s+/g, ' ');
+    return normalizeDisplayValue(value).replace(/\s+/g, ' ');
 }
 
 function formatManaTitleMetaValue(value) {
@@ -675,7 +941,7 @@ function getCardColorVars(cardData) {
         || cardData?.color100
         || cardData?.colorLight
         || '#0d9488';
-    const light = palette.colorLight || cardData?.colorLight || color;
+    const light = palette.colorLight || cardData?.colorLight || lightenCssColor(color, 0.38) || color;
     const soft = palette.color30 || toRgba(color, 0.3) || 'rgba(13, 148, 136, 0.3)';
     return {
         color,
@@ -774,6 +1040,7 @@ function hydrateArenaModelCode(code, cardData, scopeId = '') {
             }
         }
     });
+    applyReceiverIconClass(template.content, getCardReceiverIconClass(cardData));
 
     return template.innerHTML;
 }

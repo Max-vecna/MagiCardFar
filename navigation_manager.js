@@ -1286,7 +1286,6 @@ async function renderAttackList(container) {
 
 
 document.addEventListener('DOMContentLoaded', async () => {
-    await seedArenaModelTemplatesFromLocalData();
     // ... [Styles and DOM element selection remain the same] ...
     const style = document.createElement('style');
     style.innerHTML = `
@@ -1732,6 +1731,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     await openDatabase();
+    await seedArenaModelTemplatesFromLocalData();
 
     const emJogoButtons = document.querySelectorAll('[data-target="personagem-em-jogo"]');
     emJogoButtons.forEach(btn => btn.classList.add('active'));

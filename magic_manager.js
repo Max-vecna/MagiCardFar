@@ -904,6 +904,7 @@ async function captureSpellFormSnapshot() {
         danoSemMana: document.getElementById('spellDanoSemMana')?.value || '',
         vidaDado: document.getElementById('spellVidaDado')?.value || '',
         manaDado: document.getElementById('spellManaDado')?.value || '',
+        receiverIconType: document.getElementById('spellReceiverIcon')?.value || '',
         aumentos,
         spellImageFile,
         spellImage: persistedData?.image || null,
@@ -954,6 +955,8 @@ async function restoreSpellFormSnapshot(snapshot, options = {}) {
 
     await populateCharacterSelect('spellCharacterOwner');
     document.getElementById('spellCharacterOwner').value = snapshot.characterId || '';
+    const spellReceiverEl = document.getElementById('spellReceiverIcon');
+    if (spellReceiverEl) spellReceiverEl.value = snapshot.receiverIconType || '';
 
     await populateCategorySelect('spell-category-select', snapshot.type);
     document.getElementById('spell-category-select').value = snapshot.categoryId || '';
@@ -1165,6 +1168,7 @@ export async function saveSpellCard(spellForm, type) {
     const spellTrueCardInput = document.getElementById('spellTrueCardId');
     const spellCharacterOwnerInput = document.getElementById('spellCharacterOwner');
     const spellCategorySelect = document.getElementById('spell-category-select');
+    const spellReceiverIconSelect = document.getElementById('spellReceiverIcon');
     const spellRoleSelect = document.getElementById('spell-card-role');
     const spellBaseCardSelect = document.getElementById('spell-base-card-select');
     
@@ -1260,12 +1264,13 @@ export async function saveSpellCard(spellForm, type) {
         image: imageBuffer,
         imageMimeType: imageMimeType,
         acerto: spellAcertoInput.value,
-        dano: spellDamageInput.value,  
+        dano: spellDamageInput.value,
         // Novos campos salvos
         critico: spellcriticoInput ? spellcriticoInput.value : '',
         danoSemMana: spellDanoSemManaInput ? spellDanoSemManaInput.value : '',
         vidaDado: spellVidaDadoInput ? spellVidaDadoInput.value : '',
-        manaDado: spellManaDadoInput ? spellManaDadoInput.value : ''
+        manaDado: spellManaDadoInput ? spellManaDadoInput.value : '',
+        receiverIconType: spellReceiverIconSelect ? spellReceiverIconSelect.value : ''
     };
 
     if (currentEditingSpellId) {
@@ -1382,6 +1387,8 @@ export async function editSpell(spellId) {
 
     await populateCharacterSelect('spellCharacterOwner');
     document.getElementById('spellCharacterOwner').value = spellData.characterId || '';
+    const spellReceiverEl = document.getElementById('spellReceiverIcon');
+    if (spellReceiverEl) spellReceiverEl.value = spellData.receiverIconType || '';
 
     await populateCategorySelect('spell-category-select', spellData.type);
     document.getElementById('spell-category-select').value = spellData.categoryId || '';
@@ -1447,12 +1454,17 @@ export async function importSpell(file, type) {
         reader.onload = async (e) => {
             try {
                 const importedSpell = JSON.parse(e.target.result);
+                const targetTemplateType = type === 'habilidades' ? 'habilidade' : (type === 'ataques' ? 'ataque' : 'magia');
                 if (isArenaModelTemplatePayload(importedSpell)) {
-                    const templateType = type === 'habilidades' ? 'habilidade' : (type === 'ataques' ? 'ataque' : 'magia');
                     const templateCard = importedSpell.app === 'arena-card-model'
-                        ? { arenaModel: importedSpell, type: templateType }
-                        : { ...importedSpell, type: templateType };
-                    saveArenaModelTemplateFromCard({ ...templateCard, _arenaStoreName: 'rpgEffects' });
+                        ? { arenaModel: importedSpell }
+                        : { ...importedSpell };
+                    if (!saveArenaModelTemplateFromCard(templateCard)) {
+                        saveArenaModelTemplateFromCard(
+                            { ...templateCard, _arenaStoreName: 'rpgEffects', type: targetTemplateType },
+                            { templateType: targetTemplateType }
+                        );
+                    }
                     resolve({ __arenaModelTemplateOnly: true });
                     return;
                 }
@@ -1466,9 +1478,7 @@ export async function importSpell(file, type) {
                     importedSpell.disableArenaModel = false;
                     importedSpell._disableArenaModel = false;
                 }
-                if (type === 'habilidades') importedSpell.type = 'habilidade';
-                else if (type === 'ataques') importedSpell.type = 'ataque';
-                else importedSpell.type = 'magia';
+                importedSpell.type = targetTemplateType;
 
                 if (importedSpell.image) importedSpell.image = base64ToArrayBufferUtil(importedSpell.image);
                 if (importedSpell.enhanceImage) importedSpell.enhanceImage = base64ToArrayBufferUtil(importedSpell.enhanceImage);
@@ -1477,7 +1487,7 @@ export async function importSpell(file, type) {
                 importedSpell.predominantColor = await calculateColorUtil(importedSpell.image, importedSpell.imageMimeType, importedSpell.type === 'ataque'
                     ? { color30: 'rgba(248, 113, 113, 0.3)', color100: 'rgb(248, 113, 113)' }
                     : { color30: 'rgba(13, 148, 136, 0.3)', color100: 'rgb(13, 148, 136)' });
-                saveArenaModelTemplateFromCard(importedSpell);
+                saveArenaModelTemplateFromCard(importedSpell, { templateType: targetTemplateType });
                 await saveData('rpgEffects', importedSpell);
                 resolve(importedSpell);
             } catch (error) {

@@ -739,6 +739,7 @@ export async function saveCharacterCard(cardForm) {
     const personalidadeInput = document.getElementById('personalidade');
     const motivacaoInput = document.getElementById('motivacao');
     const cardClassSelect = document.getElementById('cardClass');
+    const cardReceiverIconSelect = document.getElementById('cardReceiverIcon');
 
     const acertoInput = document.getElementById('acerto');
     const danoInput = document.getElementById('dano');
@@ -839,6 +840,7 @@ export async function saveCharacterCard(cardForm) {
         ]));
 
     const classe = cardClassSelect ? cardClassSelect.value : '';
+    const receiverIconType = cardReceiverIconSelect ? cardReceiverIconSelect.value : '';
 
     let cardData;
     if (currentEditingCardId) {
@@ -850,6 +852,7 @@ export async function saveCharacterCard(cardForm) {
             level: parseInt(cardLevelInput.value) || 1,
             dinheiro: parseInt(dinheiroInput.value) || 0,
             classe,
+            receiverIconType,
             attributes,
             lore,
             items: itemIds,
@@ -870,6 +873,7 @@ export async function saveCharacterCard(cardForm) {
             level: parseInt(cardLevelInput.value) || 1,
             dinheiro: parseInt(dinheiroInput.value) || 0,
             classe,
+            receiverIconType,
             attributes,
             lore,
             items: itemIds,
@@ -928,6 +932,8 @@ export async function editCard(cardId) {
 
     const classSelect = document.getElementById('cardClass');
     if (classSelect) classSelect.value = cardData.classe || '';
+    const receiverIconSelect = document.getElementById('cardReceiverIcon');
+    if (receiverIconSelect) receiverIconSelect.value = cardData.receiverIconType || '';
 
     const attrs = cardData.attributes;
     document.getElementById('vida').value = attrs.vida;
@@ -1025,11 +1031,17 @@ export async function importCard(file, forcedCardType = '') {
         reader.onload = async (e) => {
             try {
                 const importedCard = JSON.parse(e.target.result);
+                const targetCardType = forcedCardType || importedCard?.cardType || 'character';
                 if (isArenaModelTemplatePayload(importedCard)) {
                     const templateCard = importedCard.app === 'arena-card-model'
-                        ? { arenaModel: importedCard, cardType: forcedCardType || 'character' }
-                        : { ...importedCard, cardType: forcedCardType || importedCard.cardType || 'character' };
-                    saveArenaModelTemplateFromCard({ ...templateCard, _arenaStoreName: 'rpgCards' });
+                        ? { arenaModel: importedCard }
+                        : { ...importedCard };
+                    if (!saveArenaModelTemplateFromCard(templateCard)) {
+                        saveArenaModelTemplateFromCard(
+                            { ...templateCard, _arenaStoreName: 'rpgCards', cardType: targetCardType },
+                            { templateType: targetCardType }
+                        );
+                    }
                     resolve({ __arenaModelTemplateOnly: true });
                     return;
                 }
@@ -1038,6 +1050,7 @@ export async function importCard(file, forcedCardType = '') {
                 const existingCard = await getData('rpgCards', importedCard.id);
                 importedCard.id = existingCard ? String(existingCard.id) : Date.now().toString();
                 importedCard.inPlay = existingCard ? Boolean(existingCard.inPlay) : false;
+                importedCard.cardType = targetCardType;
                 if (importedCard.arenaModel || importedCard._arenaModel) {
                     importedCard.disableArenaModel = false;
                     importedCard._disableArenaModel = false;
@@ -1048,7 +1061,7 @@ export async function importCard(file, forcedCardType = '') {
 
                 importedCard.predominantColor = await calculateColor(importedCard.backgroundImage, importedCard.backgroundMimeType);
 
-                saveArenaModelTemplateFromCard(importedCard);
+                saveArenaModelTemplateFromCard(importedCard, { templateType: targetCardType });
                 await saveData('rpgCards', importedCard);
                 resolve(importedCard);
             } catch (error) {

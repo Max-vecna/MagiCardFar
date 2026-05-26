@@ -769,14 +769,14 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--sheet-accent, #fff);
+  color: var(--sheet-icon-accent, var(--sheet-accent, #fff));
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
 }
 
 .sheet-dice-stat__icon i {
   font-size: 2rem;
   line-height: 1;
-  background: var(--sheet-accent, #fff);
+  background: var(--sheet-icon-accent, var(--sheet-accent, #fff));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
@@ -817,14 +817,14 @@ body:not(.dark) #sidebar-buttons .sidebar-btn {
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--sheet-accent, #fff);
+  color: var(--sheet-icon-accent, var(--sheet-accent, #fff));
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.7));
 }
 
 .sheet-info-stat__icon i {
   font-size: 2rem;
   line-height: 1;
-  background: var(--sheet-accent, #fff);
+  background: var(--sheet-icon-accent, var(--sheet-accent, #fff));
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;

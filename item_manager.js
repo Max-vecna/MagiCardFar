@@ -750,6 +750,7 @@ async function captureItemFormSnapshot() {
         prerequisite: document.getElementById('itemPrerequisite')?.value || '',
         characterId: document.getElementById('itemCharacterOwner')?.value || '',
         categoryId: document.getElementById('item-category-select')?.value || '',
+        receiverIconType: document.getElementById('itemReceiverIcon')?.value || '',
         cardVariant: normalizeItemRole(document.getElementById('item-card-role')?.value),
         trueSchool: '',
         baseCardId: document.getElementById('item-base-card-select')?.value || '',
@@ -792,6 +793,8 @@ async function restoreItemFormSnapshot(snapshot) {
     document.getElementById('itemCharge').value = snapshot.charge || '';
     document.getElementById('itemPrerequisite').value = snapshot.prerequisite || '';
     document.getElementById('itemAcerto').value = snapshot.acerto || '';
+    const itemReceiverEl = document.getElementById('itemReceiverIcon');
+    if (itemReceiverEl) itemReceiverEl.value = snapshot.receiverIconType || '';
     const criticoInput = document.getElementById('itemcritico');
     const danoSemManaInput = document.getElementById('itemDanoSemMana');
     const vidaDadoInput = document.getElementById('itemVidaDado');
@@ -1108,6 +1111,7 @@ export async function saveItemCard(itemForm) {
     const itemPrerequisiteInput = document.getElementById('itemPrerequisite');
     const itemCharacterOwnerInput = document.getElementById('itemCharacterOwner');
     const itemCategorySelect = document.getElementById('item-category-select');
+    const itemReceiverIconSelect = document.getElementById('itemReceiverIcon');
     const itemRoleSelect = document.getElementById('item-card-role');
     const itemBaseCardSelect = document.getElementById('item-base-card-select');
     const itemEnhanceCardInput = document.getElementById('itemEnhanceCardId');
@@ -1190,6 +1194,7 @@ export async function saveItemCard(itemForm) {
         prerequisite: itemPrerequisiteInput.value,
         characterId: itemCharacterOwnerInput.value,
         categoryId: itemCategorySelect.value,
+        receiverIconType: itemReceiverIconSelect ? itemReceiverIconSelect.value : '',
         cardVariant,
         trueSchool,
         baseCardId,
@@ -1296,6 +1301,8 @@ export async function editItem(itemId) {
     
     await populateCharacterSelect('itemCharacterOwner');
     document.getElementById('itemCharacterOwner').value = itemData.characterId || '';
+    const itemReceiverEl = document.getElementById('itemReceiverIcon');
+    if (itemReceiverEl) itemReceiverEl.value = itemData.receiverIconType || '';
 
     await populateCategorySelect('item-category-select', 'item');
     document.getElementById('item-category-select').value = itemData.categoryId || '';
@@ -1353,9 +1360,14 @@ export async function importItem(file) {
                 const importedItem = JSON.parse(e.target.result);
                 if (isArenaModelTemplatePayload(importedItem)) {
                     const templateCard = importedItem.app === 'arena-card-model'
-                        ? { arenaModel: importedItem, type: 'item' }
-                        : { ...importedItem, type: importedItem.type || 'item' };
-                    saveArenaModelTemplateFromCard({ ...templateCard, _arenaStoreName: 'rpgItems' });
+                        ? { arenaModel: importedItem }
+                        : { ...importedItem };
+                    if (!saveArenaModelTemplateFromCard(templateCard)) {
+                        saveArenaModelTemplateFromCard(
+                            { ...templateCard, _arenaStoreName: 'rpgItems', type: 'item' },
+                            { templateType: 'item' }
+                        );
+                    }
                     resolve({ __arenaModelTemplateOnly: true });
                     return;
                 }
@@ -1369,7 +1381,7 @@ export async function importItem(file) {
                     importedItem.image = base64ToArrayBufferUtil(importedItem.image);
                 }
                 importedItem.predominantColor = await calculateColorUtil(importedItem.image, importedItem.imageMimeType, { color30: 'rgba(217, 119, 6, 0.3)', color100: 'rgb(217, 119, 6)' });
-                saveArenaModelTemplateFromCard(importedItem);
+                saveArenaModelTemplateFromCard(importedItem, { templateType: 'item' });
                 await saveData('rpgItems', importedItem);
                 resolve(importedItem);
             } catch (error) {
