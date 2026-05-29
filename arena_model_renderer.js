@@ -55,6 +55,20 @@ const ARENA_SHARED_LAYOUT_FALLBACKS = {
 };
 
 const RECEIVER_ICON_CLASS_BY_TYPE = {
+    'padrao/magia': 'ra-crystal-ball',
+    'padrao/vida': 'ra-heart-bottle',
+    'padrao/mana': 'ra-bottle-vapors',
+    'padrao/habilidade': 'ra-player',
+    'padrao/item': 'ra-cubes',
+    'padrao/ataque': 'ra-crossed-swords',
+    'padrao/atributos': 'ra-player-king',
+    'modificar/magia': 'ra-crystal-wand',
+    'modificar/vida': 'ra-health-increase',
+    'modificar/mana': 'ra-bottled-bolt',
+    'modificar/habilidade': 'ra-muscle-up',
+    'modificar/item': 'ra-gear-hammer',
+    'modificar/ataque': 'ra-lightning-sword',
+    'modificar/atributos': 'ra-muscle-up',
     padrao: 'ra-cog',
     default: 'ra-cog',
     cog: 'ra-cog',
@@ -67,15 +81,82 @@ const RECEIVER_ICON_CLASS_BY_TYPE = {
     heal: 'ra-heart-bottle',
     mana: 'ra-bottle-vapors',
     restaurar: 'ra-bottle-vapors',
-    'restaurar-mana': 'ra-bottle-vapors'
+    'restaurar-mana': 'ra-bottle-vapors',
+    magia: 'ra-crystal-ball',
+    magic: 'ra-crystal-ball',
+    spell: 'ra-crystal-ball',
+    habilidade: 'ra-player',
+    skill: 'ra-player',
+    item: 'ra-cubes',
+    ataque: 'ra-crossed-swords',
+    attack: 'ra-crossed-swords',
+    atributos: 'ra-player-king',
+    atributo: 'ra-player-king'
 };
 
-const RECEIVER_ICON_CLASSES = new Set([
-    'ra-wrench',
-    'ra-cog',
-    'ra-heart-bottle',
-    'ra-bottle-vapors'
-]);
+const RECEIVER_ICON_CLASSES = new Set(Object.values(RECEIVER_ICON_CLASS_BY_TYPE));
+
+const RECEIVER_ICON_CLASS_BY_MODE = {
+    padrao: 'ra-cog',
+    modificar: 'ra-wrench'
+};
+
+const RECEIVER_ICON_CLASS_BY_TARGET = {
+    magia: 'ra-crystal-ball',
+    vida: 'ra-heart-bottle',
+    mana: 'ra-bottle-vapors',
+    habilidade: 'ra-player',
+    item: 'ra-cubes',
+    ataque: 'ra-crossed-swords',
+    atributos: 'ra-player-king'
+};
+
+const RECEIVER_ICON_ROLE_ALIASES = {
+    padrao: 'padrao',
+    default: 'padrao',
+    base: 'padrao',
+    modificar: 'modificar',
+    modificador: 'modificar',
+    modifier: 'modificar'
+};
+
+const RECEIVER_ICON_TARGET_ALIASES = {
+    magia: 'magia',
+    magic: 'magia',
+    spell: 'magia',
+    vida: 'vida',
+    cura: 'vida',
+    heal: 'vida',
+    health: 'vida',
+    mana: 'mana',
+    habilidade: 'habilidade',
+    skill: 'habilidade',
+    item: 'item',
+    itens: 'item',
+    ataque: 'ataque',
+    attack: 'ataque',
+    atributos: 'atributos',
+    atributo: 'atributos',
+    attributes: 'atributos',
+    abilidade: 'habilidade'
+};
+
+const RECEIVER_ICON_SLOT_ALIASES = {
+    mode: 'mode',
+    modo: 'mode',
+    tipo: 'mode',
+    role: 'mode',
+    target: 'target',
+    alvo: 'target',
+    categoria: 'target',
+    kind: 'target',
+    free: 'free',
+    livre: 'free',
+    custom: 'free',
+    personalizado: 'free'
+};
+
+const DESCRIPTION_HIGHLIGHT_PATTERN = /\b(aprimorar|descri[cç][aã]o|verdadeiro)\b/gi;
 
 function normalizeArenaTemplateKey(value) {
     const key = String(value || '').trim().toLowerCase();
@@ -137,21 +218,91 @@ function safeDomId(value) {
     return safeCssName(value || Date.now()).replace(/^[^a-z]+/, '') || 'card';
 }
 
+function normalizeReceiverIconKey(value) {
+    return String(value || '')
+        .trim()
+        .toLowerCase()
+        .replace(/\\/g, '/')
+        .replace(/\s*\/\s*/g, '/')
+        .replace(/[\s_]+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+}
+
+function normalizeReceiverIconType(value) {
+    const key = normalizeReceiverIconKey(value);
+    if (!key || key.startsWith('ra-')) return '';
+
+    if (key.includes('/')) {
+        const [roleRaw, targetRaw] = key.split('/');
+        const role = RECEIVER_ICON_ROLE_ALIASES[roleRaw] || '';
+        const target = RECEIVER_ICON_TARGET_ALIASES[targetRaw] || '';
+        return role && target ? `${role}/${target}` : '';
+    }
+
+    for (const [roleRaw, role] of Object.entries(RECEIVER_ICON_ROLE_ALIASES)) {
+        const prefix = `${roleRaw}-`;
+        if (!key.startsWith(prefix)) continue;
+        const target = RECEIVER_ICON_TARGET_ALIASES[key.slice(prefix.length)] || '';
+        if (target) return `${role}/${target}`;
+    }
+
+    return RECEIVER_ICON_ROLE_ALIASES[key] || RECEIVER_ICON_TARGET_ALIASES[key] || key;
+}
+
+function normalizeRpgIconClass(value) {
+    const raw = String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+    if (!raw || raw === 'none' || raw === 'sem icone') return '';
+    const className = (raw.match(/(?:^|\s)(ra-[a-z0-9-]+)(?:\s|$)/)?.[1] || raw.replace(/^ra\s+/, ''));
+    const icon = className.startsWith('ra-') ? className : `ra-${className}`;
+    return /^ra-[a-z0-9-]+$/.test(icon) ? icon : '';
+}
+
 function normalizeReceiverIconClass(value) {
-    const key = String(value || '').trim().toLowerCase().replace(/[\s_]+/g, '-');
+    const key = normalizeReceiverIconKey(value);
     if (!key) return '';
     const iconClass = key.startsWith('ra-') ? key : `ra-${key}`;
-    if (RECEIVER_ICON_CLASSES.has(iconClass)) return iconClass;
-    return RECEIVER_ICON_CLASS_BY_TYPE[key.replace(/^ra-/, '')] || '';
+    if (key.startsWith('ra-') || RECEIVER_ICON_CLASSES.has(iconClass)) return iconClass;
+    const receiverType = normalizeReceiverIconType(key);
+    return RECEIVER_ICON_CLASS_BY_TYPE[receiverType] || RECEIVER_ICON_CLASS_BY_TYPE[key.replace(/^ra-/, '')] || '';
+}
+
+function getCardReceiverIconType(cardData) {
+    return cardData?.receiverIconType
+        || cardData?.receiverIcon
+        || cardData?.iconReceiverType
+        || cardData?.iconType;
 }
 
 function getCardReceiverIconClass(cardData) {
-    return normalizeReceiverIconClass(
-        cardData?.receiverIconType
-        || cardData?.receiverIcon
-        || cardData?.iconReceiverType
-        || cardData?.iconType
-    );
+    return normalizeReceiverIconClass(getCardReceiverIconType(cardData));
+}
+
+function getCardReceiverIconState(cardData) {
+    const type = normalizeReceiverIconType(getCardReceiverIconType(cardData));
+    const [typeMode, typeTarget] = type.includes('/') ? type.split('/') : ['', ''];
+    const mode = RECEIVER_ICON_ROLE_ALIASES[normalizeReceiverIconKey(cardData?.receiverIconMode || cardData?.iconReceiverMode)] || typeMode || '';
+    const target = RECEIVER_ICON_TARGET_ALIASES[normalizeReceiverIconKey(cardData?.receiverIconTarget || cardData?.iconReceiverTarget)] || typeTarget || '';
+    const freeClass = normalizeRpgIconClass(cardData?.receiverIconFree || cardData?.receiverIconClass || cardData?.iconReceiverFree || '');
+
+    return {
+        mode,
+        target,
+        freeClass,
+        type: mode && target ? `${mode}/${target}` : type
+    };
+}
+
+function normalizeReceiverIconSlot(value) {
+    return RECEIVER_ICON_SLOT_ALIASES[normalizeReceiverIconKey(value)] || '';
+}
+
+function getReceiverIconClassForSlot(slot, receiverState) {
+    const normalizedSlot = normalizeReceiverIconSlot(slot);
+    if (normalizedSlot === 'mode') return RECEIVER_ICON_CLASS_BY_MODE[receiverState?.mode] || '';
+    if (normalizedSlot === 'target') return RECEIVER_ICON_CLASS_BY_TARGET[receiverState?.target] || '';
+    if (normalizedSlot === 'free') return receiverState?.freeClass || '';
+    return '';
 }
 
 function setRpgAwesomeIconClass(icon, iconClass) {
@@ -162,9 +313,37 @@ function setRpgAwesomeIconClass(icon, iconClass) {
     icon.classList.add('ra', iconClass);
 }
 
-function applyReceiverIconClass(root, iconClass) {
+function getReceiverOptionType(node) {
+    if (!node?.getAttribute) return '';
+    return normalizeReceiverIconType(
+        node.getAttribute('data-icon-option-type')
+        || node.querySelector?.('[data-icon-option-type]')?.getAttribute('data-icon-option-type')
+        || ''
+    );
+}
+
+function receiverOptionTypeMatches(optionType, receiverType) {
+    const option = normalizeReceiverIconType(optionType);
+    const target = normalizeReceiverIconType(receiverType);
+    if (!option || !target) return false;
+    if (option === target) return true;
+    if (!option.includes('/') && target.includes('/')) {
+        const [role, kind] = target.split('/');
+        return option === role || option === kind;
+    }
+    return false;
+}
+
+function applyReceiverIconClass(root, iconClass, receiverType = '') {
     if (!root || !iconClass) return;
-    root.querySelectorAll('[data-icon-receiver="1"]').forEach(node => {
+    const receiverNodes = Array.from(root.querySelectorAll('[data-icon-receiver="1"]'));
+    const normalizedReceiverType = normalizeReceiverIconType(receiverType);
+    const hasSpecificReceiverOptions = receiverNodes.some(node => getReceiverOptionType(node).includes('/'));
+    const targetNodes = hasSpecificReceiverOptions && normalizedReceiverType
+        ? receiverNodes.filter(node => receiverOptionTypeMatches(getReceiverOptionType(node), receiverType))
+        : receiverNodes;
+
+    targetNodes.forEach(node => {
         const icons = node.matches?.('i')
             ? [node]
             : Array.from(node.querySelectorAll('i.ra, .ra'));
@@ -172,8 +351,66 @@ function applyReceiverIconClass(root, iconClass) {
     });
 }
 
+function applyReceiverIconClasses(root, cardData) {
+    if (!root) return;
+    const receiverState = getCardReceiverIconState(cardData);
+    const legacyIconClass = getCardReceiverIconClass(cardData);
+
+    Array.from(root.querySelectorAll('[data-icon-receiver="1"]')).forEach(node => {
+        const slot = normalizeReceiverIconSlot(node.getAttribute('data-icon-receiver-slot') || '');
+        const iconClass = slot
+            ? getReceiverIconClassForSlot(slot, receiverState)
+            : legacyIconClass;
+        if (!iconClass) return;
+
+        const icons = node.matches?.('i')
+            ? [node]
+            : Array.from(node.querySelectorAll('i.ra, .ra'));
+        icons.forEach(icon => setRpgAwesomeIconClass(icon, iconClass));
+    });
+}
+
+function isDescriptionHighlightField(key) {
+    return ['description', 'effect'].includes(String(key || '').trim());
+}
+
+function appendDescriptionHighlightText(target, value) {
+    if (!target || typeof document === 'undefined') return;
+    const text = String(value ?? '');
+    target.replaceChildren();
+    let cursor = 0;
+    text.replace(DESCRIPTION_HIGHLIGHT_PATTERN, (match, _word, offset) => {
+        if (offset > cursor) target.appendChild(document.createTextNode(text.slice(cursor, offset)));
+        const span = document.createElement('span');
+        span.className = 'label-description-keyword';
+        span.textContent = match;
+        target.appendChild(span);
+        cursor = offset + match.length;
+        return match;
+    });
+    if (cursor < text.length) target.appendChild(document.createTextNode(text.slice(cursor)));
+}
+
 function cssClassForElement(element) {
     return `clip-${safeCssName(element?.name)}-${safeCssName(element?.id)}`;
+}
+
+function applyArenaModelElementBindings(root, model) {
+    if (!root || !Array.isArray(model?.elements)) return;
+    model.elements.forEach(element => {
+        const fieldKey = String(element?.cardFieldKey || '').trim();
+        if (!fieldKey) return;
+        const className = cssClassForElement(element);
+        const label = root.querySelector(`.clip-div.${className} > .clip-label`);
+        if (!label) return;
+
+        label.setAttribute('data-card-field', fieldKey);
+        if (element.cardTitleMetaMode && !element.labelExtraHidden) {
+            label.setAttribute('data-card-title-meta', String(element.cardTitleMetaMode));
+        } else {
+            label.removeAttribute('data-card-title-meta');
+        }
+    });
 }
 
 function normalizeHexColor(value, fallback = '#0d9488') {
@@ -231,6 +468,15 @@ function shouldUseCardImageForElement(element, sourceRootId) {
     return false;
 }
 
+function getImageBackdropImageCss(element) {
+    const image = String(element?.imageBgImage || '').trim();
+    return image ? `url("${cssString(image)}")` : 'none';
+}
+
+function hasImageBackdropImage(element) {
+    return Boolean(String(element?.imageBgImage || '').trim());
+}
+
 function getEffectiveChildFillMode(element) {
     if (!element?.parentId) return 'solid';
     if (['parent-content', 'parent-mask-cutout', 'transparent'].includes(element.childFillMode)) return 'transparent';
@@ -262,9 +508,13 @@ function replaceImageBackdropColorRules(code, elements, sourceRootId = '') {
             const fallback = normalizeHexColor(element.parentBgColor || element.colorA, '#0d9488');
             const dynamicColor = cardColorVar(fallback);
 
-            next = replaceCssRuleBlock(next, `\\.clip-div\\.${className}\\s*>\\s*\\.clip-image-color-bg`, block => (
-                setCssProperty(block, 'background', dynamicColor)
-            ));
+            next = replaceCssRuleBlock(next, `\\.clip-div\\.${className}\\s*>\\s*\\.clip-image-color-bg`, block => {
+                let updated = setCssProperty(block, 'background-color', hasImageBackdropImage(element) ? 'transparent' : dynamicColor);
+                updated = setCssProperty(updated, 'background-image', getImageBackdropImageCss(element));
+                updated = setCssProperty(updated, 'background-size', 'cover');
+                updated = setCssProperty(updated, 'background-position', 'center');
+                return setCssProperty(updated, 'background-repeat', 'no-repeat');
+            });
             next = replaceCssRuleBlock(next, `\\.clip-div\\.${className}\\s*>\\s*\\.clip-parent-bg`, block => (
                 setCssProperty(block, 'background', dynamicColor)
             ));
@@ -470,11 +720,20 @@ function restoreLabelStyleRules(code, elements) {
             let updated = setCssProperty(block, 'color', iconColor);
             updated = setCssProperty(updated, 'font-size', iconSize);
             updated = setCssProperty(updated, 'opacity', iconOpacity);
-            return setCssProperty(updated, 'filter', iconFilter);
+            updated = setCssProperty(updated, 'filter', iconFilter);
+            return setCssProperty(updated, 'z-index', '11');
+        });
+        next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label-custom-icon`, block => {
+            let updated = setCssProperty(block, 'color', iconColor);
+            updated = setCssProperty(updated, 'font-size', iconSize);
+            updated = setCssProperty(updated, 'opacity', iconOpacity);
+            updated = setCssProperty(updated, 'filter', iconFilter);
+            return setCssProperty(updated, 'z-index', '11');
         });
         next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label`, block => {
             let updated = setCssProperty(block, 'color', labelColor);
-            return setCssProperty(updated, 'font-size', labelSize);
+            updated = setCssProperty(updated, 'font-size', labelSize);
+            return setCssProperty(updated, 'z-index', '12');
         });
         next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label\\s*>\\s*\\.clip-label-main`, block => {
             let updated = setCssProperty(block, 'color', labelColor);
@@ -485,6 +744,11 @@ function restoreLabelStyleRules(code, elements) {
             let updated = setCssProperty(block, 'color', extraColor);
             updated = setCssProperty(updated, 'font-size', extraSize);
             return setCssProperty(updated, 'font-weight', extraWeight);
+        });
+        next = replaceCssRuleBlock(next, `${baseSelector}\\.clip-label\\s+\\.label-description-keyword`, block => {
+            let updated = setCssProperty(block, 'color', iconColor);
+            updated = setCssProperty(updated, 'font-size', '1.08em');
+            return setCssProperty(updated, 'font-weight', '800');
         });
     });
     return next;
@@ -556,6 +820,10 @@ export function clearArenaModelTemplates() {
     } catch (error) {
         console.warn('Nao foi possivel limpar os templates do Arena:', error);
     }
+}
+
+export function hasArenaModelTemplates() {
+    return Object.keys(readArenaModelTemplates()).length > 0;
 }
 
 export function isArenaModelTemplatePayload(cardData) {
@@ -1004,7 +1272,7 @@ function scopeArenaModelCss(css, scopeSelector) {
     });
 }
 
-function hydrateArenaModelCode(code, cardData, scopeId = '') {
+function hydrateArenaModelCode(code, cardData, scopeId = '', model = null) {
     if (!code || typeof document === 'undefined') return code || '';
 
     const template = document.createElement('template');
@@ -1018,16 +1286,27 @@ function hydrateArenaModelCode(code, cardData, scopeId = '') {
             stage.setAttribute('data-arena-model-scope', scopeId);
         });
     }
+    applyArenaModelElementBindings(template.content, model);
     template.content.querySelectorAll('[data-card-field]').forEach(node => {
         const key = node.getAttribute('data-card-field') || '';
         const value = getCardFieldValue(cardData, key);
         const displayValue = valueHasText(value) ? value : '-';
-        const main = node.querySelector('.clip-label-main');
-        if (main) main.textContent = displayValue;
-        else if (!node.querySelector('.clip-label-extra')) node.textContent = displayValue;
-        if (node.getAttribute('data-card-title-meta') === 'mana-circle') {
+        const hasTitleMeta = node.getAttribute('data-card-title-meta') === 'mana-circle';
+        let main = node.querySelector('.clip-label-main');
+        let extra = node.querySelector('.clip-label-extra');
+        if (!main && extra && hasTitleMeta) {
+            main = document.createElement('span');
+            main.className = 'clip-label-main';
+            (node.querySelector('.clip-label-text-stack') || extra.parentElement || node).insertBefore(main, extra);
+        }
+        const target = main || (extra && !hasTitleMeta ? extra : (node.querySelector('.clip-label-text-stack') || node));
+        if (target) {
+            if (isDescriptionHighlightField(key)) appendDescriptionHighlightText(target, displayValue);
+            else target.textContent = displayValue;
+        }
+        if (hasTitleMeta) {
             const metaValue = buildCardTitleMetaValue(cardData);
-            let extra = node.querySelector('.clip-label-extra');
+            extra = node.querySelector('.clip-label-extra');
             if (metaValue) {
                 if (!extra) {
                     extra = document.createElement('span');
@@ -1040,7 +1319,7 @@ function hydrateArenaModelCode(code, cardData, scopeId = '') {
             }
         }
     });
-    applyReceiverIconClass(template.content, getCardReceiverIconClass(cardData));
+    applyReceiverIconClasses(template.content, cardData);
 
     return template.innerHTML;
 }
@@ -1082,7 +1361,7 @@ function resolveArenaModelSize(model, options = {}) {
 function renderArenaModelHtml(cardData, options = {}) {
     const model = getArenaModel(cardData);
     const uniqueId = `arena-model-${safeDomId(cardData?.id || cardData?.name || cardData?.title)}-${Math.random().toString(36).slice(2, 7)}`;
-    const code = hydrateArenaModelCode(model?.generatedCode || model?.html || model?.code || '', cardData, uniqueId);
+    const code = hydrateArenaModelCode(model?.generatedCode || model?.html || model?.code || '', cardData, uniqueId, model);
     const { modelW, modelH, finalWidth, finalHeight } = resolveArenaModelSize(model, options);
     const scale = Math.min(finalWidth / modelW, finalHeight / modelH);
     const cardImageUrl = getCardImageUrl(cardData);

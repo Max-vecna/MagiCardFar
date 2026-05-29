@@ -1,4 +1,0 @@
-ra-wrench - modificar: modificar ou adiiconar algo a algum valor
-ra-cog - padrão: não altera nada nos valores do card, card de uso basico
-ra-heart-bottle - cura vida: especifico para curar individuos
-ra-bottle-vapors- restalrar mana: especifico para restalrar mana de individuos

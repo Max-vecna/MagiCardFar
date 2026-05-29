@@ -4,7 +4,8 @@ import { openSelectionModal as openItemSelectionModal } from './navigation_manag
 import { renderFullCharacterSheet } from './card-renderer.js';
 import { renderFullSpellSheet } from './magic_renderer.js';
 import { renderFullAttackSheet } from './attack_renderer.js';
-import { isArenaModelTemplatePayload, saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
+import { hasArenaModel, hasArenaModelTemplates, isArenaModelTemplatePayload, saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
+import { applyReceiverIconSelection, readReceiverIconControls, setReceiverIconControlsVisible, writeReceiverIconControls } from './receiver_icon_controls.js';
 import { readFileAsArrayBuffer, bufferToBlob, arrayBufferToBase64, base64ToArrayBuffer, showImagePreview, calculateColor, showCustomConfirm } from './ui_utils.js';
 
 const PERICIAS_DATA = {
@@ -28,6 +29,15 @@ let backgroundImageFile = null;
 let currentCharacterItems = [];
 let currentCharacterFormType = 'character';
 let pendingRelatedCharacterCreation = null;
+
+function shouldShowCharacterReceiverIconControls(cardData = null) {
+    return Boolean(hasArenaModelTemplates() || hasArenaModel(cardData));
+}
+
+function syncCharacterReceiverIconControls(cardData = {}) {
+    setReceiverIconControlsVisible('card', shouldShowCharacterReceiverIconControls(cardData));
+    writeReceiverIconControls('card', cardData || {});
+}
 
 function toInt(value) {
     const n = parseInt(value, 10);
@@ -199,6 +209,7 @@ function updateRelatedCreationUi() {
 
 async function captureCharacterFormSnapshot() {
     const persistedData = currentEditingCardId ? await getData('rpgCards', currentEditingCardId) : null;
+    const receiverIconSelection = readReceiverIconControls('card');
 
     return {
         currentEditingCardId,
@@ -208,6 +219,10 @@ async function captureCharacterFormSnapshot() {
         level: document.getElementById('cardLevel')?.value || '',
         dinheiro: document.getElementById('dinheiro')?.value || '',
         classe: document.getElementById('cardClass')?.value || '',
+        receiverIconType: receiverIconSelection.type,
+        receiverIconMode: receiverIconSelection.mode,
+        receiverIconTarget: receiverIconSelection.target,
+        receiverIconFree: receiverIconSelection.free,
         vida: document.getElementById('vida')?.value || '',
         mana: document.getElementById('mana')?.value || '',
         vidaAtual: document.getElementById('vidaAtual')?.value || '',
@@ -258,6 +273,7 @@ async function restoreCharacterFormSnapshot(snapshot, options = {}) {
     document.getElementById('cardLevel').value = snapshot.level || '';
     document.getElementById('dinheiro').value = snapshot.dinheiro || '';
     document.getElementById('cardClass').value = snapshot.classe || '';
+    syncCharacterReceiverIconControls(snapshot);
 
     document.getElementById('vida').value = snapshot.vida || '';
     document.getElementById('mana').value = snapshot.mana || '';
@@ -432,6 +448,7 @@ export function resetCharacterFormState(preserveRelatedCreation = false) {
 
     const cardForm = document.getElementById('cardForm');
     if (cardForm) cardForm.reset();
+    syncCharacterReceiverIconControls();
 
     document.getElementById('selected-magics-container').innerHTML = '';
     document.getElementById('selected-skills-container').innerHTML = '';
@@ -739,7 +756,6 @@ export async function saveCharacterCard(cardForm) {
     const personalidadeInput = document.getElementById('personalidade');
     const motivacaoInput = document.getElementById('motivacao');
     const cardClassSelect = document.getElementById('cardClass');
-    const cardReceiverIconSelect = document.getElementById('cardReceiverIcon');
 
     const acertoInput = document.getElementById('acerto');
     const danoInput = document.getElementById('dano');
@@ -840,7 +856,7 @@ export async function saveCharacterCard(cardForm) {
         ]));
 
     const classe = cardClassSelect ? cardClassSelect.value : '';
-    const receiverIconType = cardReceiverIconSelect ? cardReceiverIconSelect.value : '';
+    const receiverIconSelection = readReceiverIconControls('card');
 
     let cardData;
     if (currentEditingCardId) {
@@ -852,7 +868,6 @@ export async function saveCharacterCard(cardForm) {
             level: parseInt(cardLevelInput.value) || 1,
             dinheiro: parseInt(dinheiroInput.value) || 0,
             classe,
-            receiverIconType,
             attributes,
             lore,
             items: itemIds,
@@ -873,7 +888,6 @@ export async function saveCharacterCard(cardForm) {
             level: parseInt(cardLevelInput.value) || 1,
             dinheiro: parseInt(dinheiroInput.value) || 0,
             classe,
-            receiverIconType,
             attributes,
             lore,
             items: itemIds,
@@ -887,6 +901,7 @@ export async function saveCharacterCard(cardForm) {
             inPlay: false
         };
     }
+    applyReceiverIconSelection(cardData, receiverIconSelection);
 
     cardData.predominantColor = await calculateColor(cardData.image, cardData.imageMimeType);
 
@@ -932,8 +947,7 @@ export async function editCard(cardId) {
 
     const classSelect = document.getElementById('cardClass');
     if (classSelect) classSelect.value = cardData.classe || '';
-    const receiverIconSelect = document.getElementById('cardReceiverIcon');
-    if (receiverIconSelect) receiverIconSelect.value = cardData.receiverIconType || '';
+    syncCharacterReceiverIconControls(cardData);
 
     const attrs = cardData.attributes;
     document.getElementById('vida').value = attrs.vida;
@@ -1042,6 +1056,7 @@ export async function importCard(file, forcedCardType = '') {
                             { templateType: targetCardType }
                         );
                     }
+                    syncCharacterReceiverIconControls();
                     resolve({ __arenaModelTemplateOnly: true });
                     return;
                 }
@@ -1062,6 +1077,7 @@ export async function importCard(file, forcedCardType = '') {
                 importedCard.predominantColor = await calculateColor(importedCard.backgroundImage, importedCard.backgroundMimeType);
 
                 saveArenaModelTemplateFromCard(importedCard, { templateType: targetCardType });
+                syncCharacterReceiverIconControls(importedCard);
                 await saveData('rpgCards', importedCard);
                 resolve(importedCard);
             } catch (error) {
@@ -1092,6 +1108,8 @@ function getCurrentlySelectedPericias() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    syncCharacterReceiverIconControls();
+
     const characterImageUpload = document.getElementById('characterImageUpload');
     if (characterImageUpload) {
         characterImageUpload.addEventListener('change', (e) => {

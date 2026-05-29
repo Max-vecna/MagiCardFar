@@ -1,7 +1,8 @@
 import { saveData, getData, removeData } from './local_db.js';
 import { getAumentosData, populateCharacterSelect } from './character_manager.js';
 import { populateCategorySelect } from './category_manager.js';
-import { isArenaModelTemplatePayload, saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
+import { hasArenaModel, hasArenaModelTemplates, isArenaModelTemplatePayload, saveArenaModelTemplateFromCard } from './arena_model_renderer.js';
+import { applyReceiverIconSelection, readReceiverIconControls, setReceiverIconControlsVisible, writeReceiverIconControls } from './receiver_icon_controls.js';
 import {
     showImagePreview,
     readFileAsArrayBuffer as readFileAsArrayBufferUtil,
@@ -20,6 +21,15 @@ let itemBaseDraftId = null;
 const itemPendingRelatedDrafts = { enhance: null, true: null };
 let activeItemRelationType = 'enhance';
 let openItemRelationsModalForRole = null;
+
+function shouldShowItemReceiverIconControls(itemData = null) {
+    return Boolean(hasArenaModelTemplates() || hasArenaModel(itemData));
+}
+
+function syncItemReceiverIconControls(itemData = {}) {
+    setReceiverIconControlsVisible('item', shouldShowItemReceiverIconControls(itemData));
+    writeReceiverIconControls('item', itemData || {});
+}
 
 const RELATED_ITEM_ROLES = ['enhance', 'true'];
 const RELATED_ITEM_ROLE_LABELS = {
@@ -729,6 +739,7 @@ async function collectItemInlineRelatedPayloads(roles, baseItemId, roleIds, base
 
 async function captureItemFormSnapshot() {
     const persistedData = currentEditingItemId ? await getData('rpgItems', currentEditingItemId) : null;
+    const receiverIconSelection = readReceiverIconControls('item');
     const aumentos = [];
     document.querySelectorAll('#item-aumentos-list div[data-nome]').forEach(el => {
         aumentos.push({
@@ -750,7 +761,10 @@ async function captureItemFormSnapshot() {
         prerequisite: document.getElementById('itemPrerequisite')?.value || '',
         characterId: document.getElementById('itemCharacterOwner')?.value || '',
         categoryId: document.getElementById('item-category-select')?.value || '',
-        receiverIconType: document.getElementById('itemReceiverIcon')?.value || '',
+        receiverIconType: receiverIconSelection.type,
+        receiverIconMode: receiverIconSelection.mode,
+        receiverIconTarget: receiverIconSelection.target,
+        receiverIconFree: receiverIconSelection.free,
         cardVariant: normalizeItemRole(document.getElementById('item-card-role')?.value),
         trueSchool: '',
         baseCardId: document.getElementById('item-base-card-select')?.value || '',
@@ -793,8 +807,7 @@ async function restoreItemFormSnapshot(snapshot) {
     document.getElementById('itemCharge').value = snapshot.charge || '';
     document.getElementById('itemPrerequisite').value = snapshot.prerequisite || '';
     document.getElementById('itemAcerto').value = snapshot.acerto || '';
-    const itemReceiverEl = document.getElementById('itemReceiverIcon');
-    if (itemReceiverEl) itemReceiverEl.value = snapshot.receiverIconType || '';
+    syncItemReceiverIconControls(snapshot);
     const criticoInput = document.getElementById('itemcritico');
     const danoSemManaInput = document.getElementById('itemDanoSemMana');
     const vidaDadoInput = document.getElementById('itemVidaDado');
@@ -1093,6 +1106,7 @@ export function resetItemFormState(preserveRelatedCreation = false) {
     if (trueInput) trueInput.value = '';
     if (enhanceText) enhanceText.value = '';
     if (trueText) trueText.value = '';
+    syncItemReceiverIconControls();
 
     showImagePreview(document.getElementById('itemImagePreview'), null);
     updateItemRoleUi();
@@ -1111,7 +1125,6 @@ export async function saveItemCard(itemForm) {
     const itemPrerequisiteInput = document.getElementById('itemPrerequisite');
     const itemCharacterOwnerInput = document.getElementById('itemCharacterOwner');
     const itemCategorySelect = document.getElementById('item-category-select');
-    const itemReceiverIconSelect = document.getElementById('itemReceiverIcon');
     const itemRoleSelect = document.getElementById('item-card-role');
     const itemBaseCardSelect = document.getElementById('item-base-card-select');
     const itemEnhanceCardInput = document.getElementById('itemEnhanceCardId');
@@ -1145,6 +1158,7 @@ export async function saveItemCard(itemForm) {
     const cardVariant = normalizeItemRole(itemRoleSelect?.value);
     const baseCardId = cardVariant === 'base' ? '' : (itemBaseCardSelect?.value || relatedCreationContext?.baseItemId || relatedCreationContext?.baseDraftId || '');
     const trueSchool = '';
+    const receiverIconSelection = readReceiverIconControls('item');
 
     if (cardVariant !== 'base' && !baseCardId) {
         showCustomAlert('Escolha um card base para este item.');
@@ -1194,7 +1208,6 @@ export async function saveItemCard(itemForm) {
         prerequisite: itemPrerequisiteInput.value,
         characterId: itemCharacterOwnerInput.value,
         categoryId: itemCategorySelect.value,
-        receiverIconType: itemReceiverIconSelect ? itemReceiverIconSelect.value : '',
         cardVariant,
         trueSchool,
         baseCardId,
@@ -1209,6 +1222,7 @@ export async function saveItemCard(itemForm) {
         image: imageBuffer,
         imageMimeType: imageMimeType,
     };
+    applyReceiverIconSelection(baseData, receiverIconSelection);
 
     if (currentEditingItemId) {
         itemData = existingData;
@@ -1301,8 +1315,7 @@ export async function editItem(itemId) {
     
     await populateCharacterSelect('itemCharacterOwner');
     document.getElementById('itemCharacterOwner').value = itemData.characterId || '';
-    const itemReceiverEl = document.getElementById('itemReceiverIcon');
-    if (itemReceiverEl) itemReceiverEl.value = itemData.receiverIconType || '';
+    syncItemReceiverIconControls(itemData);
 
     await populateCategorySelect('item-category-select', 'item');
     document.getElementById('item-category-select').value = itemData.categoryId || '';
@@ -1368,6 +1381,7 @@ export async function importItem(file) {
                             { templateType: 'item' }
                         );
                     }
+                    syncItemReceiverIconControls();
                     resolve({ __arenaModelTemplateOnly: true });
                     return;
                 }
@@ -1382,6 +1396,7 @@ export async function importItem(file) {
                 }
                 importedItem.predominantColor = await calculateColorUtil(importedItem.image, importedItem.imageMimeType, { color30: 'rgba(217, 119, 6, 0.3)', color100: 'rgb(217, 119, 6)' });
                 saveArenaModelTemplateFromCard(importedItem, { templateType: 'item' });
+                syncItemReceiverIconControls(importedItem);
                 await saveData('rpgItems', importedItem);
                 resolve(importedItem);
             } catch (error) {
@@ -1394,6 +1409,7 @@ export async function importItem(file) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+    syncItemReceiverIconControls();
     populateItemAumentosSelect();
     setupItemRelationsModal();
     
