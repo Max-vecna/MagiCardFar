@@ -1,0 +1,51 @@
+padrão
+modificador
+
+esses icones indica que mais de um campo foi alterado no card de sessoes diferentes:
+-magia;
+-habilidade;
+-item;
+-ataque;
+
+esses icon idicam que uma sessão apenas foi modificada:
+-medicina:
+cura, vida
+
+-Atrubutos:
+ex, av,al, du, cd
+
+-Combate:
+Acerto, critico, atk, atk s/m
+
+-Texto:
+Descrição, aprimorar, verdaddeiro, efeito
+
+
+
+Nos formularios de criação dos cards de ataque/habilidade/magia atualize os seguintes campos
+Execução: (trocar o input de texto por um selecionados com a lista abaixo, coloque um opcao de "personalisado" que quando selecionado aparecer um input texto)
+Padrão
+Movimento
+Reação
+Completa
+
+Alcance: (trocar o input de texto por um selecionados com a lista abaixo, coloque um opcao de "personalisado" que quando selecionado aparecer um input texto)
+Pessoal
+Toque
+Curto 
+Médio 
+Longo
+Ilimitado
+
+Alvo: manter input de texto 
+
+Duração: (trocar o input de texto por um selecionados com a lista abaixo, coloque um opcao de "personalisado" que quando selecionado aparecer um input texto)
+Instantânea
+Rodadas, minutos, horas ( se um desses selecionados incluir um input de texto)
+Cena
+Sustentada
+Permanente
+
+Resistência: manter input de texto 
+
+inclua abreviações nas seleções que serão elas que vão ser usadas nos cards para não ser incluido muito texto
