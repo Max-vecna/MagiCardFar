@@ -204,14 +204,14 @@ div[id^="item-sheet-"],
 }
 
 #actions-sidebar-1.active #sidebar-toggle-1 > i {
-    transform: rotat?(180deg);
+    transform: rotate(180deg);
 }
 
 #actions-sidebar #sidebar-toggle > i {
-    transform: rotat?(180deg);
+    transform: rotate(180deg);
 }
 #actions-sidebar.active #sidebar-toggle > i {
-    transform: rotat?(0);
+    transform: rotate(0);
 }
 
 .nav-button {
@@ -290,7 +290,7 @@ div[id^="item-sheet-"],
   aspect-ratio: 9 / 16;
   position: relative;
   z-index: 10;
-  isolation: isolat?;
+  isolation: isolate;
 
   overflow: visible;
 }
@@ -469,7 +469,7 @@ div[id^="item-sheet-"],
 }
 
 .miniCard {
-  isolation: isolat?;
+  isolation: isolate;
 
 }
 
@@ -1094,7 +1094,7 @@ div[id^="item-sheet-"],
 .related-card-action-option {
   width: 100%;
   display: grid;
-  grid-templat?-columns: minmax(5.4rem, auto) 1fr;
+  grid-template-columns: minmax(5.4rem, auto) 1fr;
   gap: 0.2rem 0.75rem;
   align-items: center;
   padding: 0.85rem 0.95rem;
@@ -1157,7 +1157,7 @@ div[id^="item-sheet-"],
 
 @media (max-width: 420px) {
   .related-card-action-option {
-    grid-templat?-columns: 1fr;
+    grid-template-columns: 1fr;
   }
 
   .related-card-action-option__role {
@@ -1466,8 +1466,8 @@ div[id^="item-sheet-"],
     top: 50%;
     left: -10%;
 }
-.slot-blocked::before { transform: rotat?(45deg); }
-.slot-blocked::after { transform: rotat?(-45deg); }
+.slot-blocked::before { transform: rotate(45deg); }
+.slot-blocked::after { transform: rotate(-45deg); }
 
 .slot-item-name {
     position: absolute;
@@ -1797,7 +1797,7 @@ div[id^="item-sheet-"],
 }
 
 .character-collection-modal__close:hover {
-    transform: rotat?(90deg);
+    transform: rotate(90deg);
     background: rgba(239, 68, 68, 0.18);
 }
 
@@ -1994,7 +1994,7 @@ div[id^="item-sheet-"],
 
 .character-collection-modal-grid {
     display: grid;
-    grid-templat?-columns: repeat(4, minmax(0, 1fr));
+    grid-template-columns: repeat(4, minmax(0, 1fr));
     gap: 1rem;
     align-items: start;
     padding: 0.2rem 0.1rem 0.75rem;
@@ -2075,7 +2075,7 @@ div[id^="item-sheet-"],
     }
 
     .character-collection-modal-grid {
-        grid-templat?-columns: repeat(4, minmax(0, 1fr));
+        grid-template-columns: repeat(4, minmax(0, 1fr));
         gap: 1rem;
     }
 
@@ -2086,7 +2086,7 @@ div[id^="item-sheet-"],
 #selected-attacks-container,
 #selected-relationships-container {
     display: grid;
-    grid-templat?-columns: repeat(6, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 0.45rem;
     min-height: 105px;
     max-height: 500px;
@@ -2632,7 +2632,7 @@ nav {
 
 .related-page-status-grid {
     display: grid;
-    grid-templat?-columns: repeat(auto-fit, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 0.5rem;
 }
 
@@ -2816,7 +2816,7 @@ nav {
 #selected-skills-container,
 #selected-attacks-container,
 #selected-relationships-container {
-    grid-templat?-columns: repeat(auto-fill, minmax(78px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(78px, 1fr));
     min-height: 112px;
     background: var(--form-panel-bg) !important;
     border: 1px solid var(--form-panel-border);
@@ -2862,7 +2862,7 @@ nav {
     #itemForm {
         max-width: none;
         display: grid !important;
-        grid-templat?-columns: 220px minmax(0, 1fr) minmax(340px, 0.72fr);
+        grid-template-columns: 220px minmax(0, 1fr) minmax(340px, 0.72fr);
         gap: 1rem;
         align-items: start;
     }
@@ -2876,7 +2876,7 @@ nav {
 
     #spellForm,
     #itemForm {
-        grid-templat?-columns: 180px minmax(0, 1.18fr) minmax(340px, 0.82fr);
+        grid-template-columns: 180px minmax(0, 1.18fr) minmax(340px, 0.82fr);
     }
 
     #cardForm > .flex:first-child,
@@ -2948,7 +2948,7 @@ nav {
         grid-column: 3;
         grid-row: 1;
         display: grid;
-        grid-templat?-columns: 1fr;
+        grid-template-columns: 1fr;
         align-self: start;
     }
 
@@ -3041,7 +3041,7 @@ nav {
 
     #cardForm > .flex > div:first-child {
         display: grid;
-        grid-templat?-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
     #spellForm > .flex > div:first-child,
@@ -3061,7 +3061,7 @@ nav {
     #selected-skills-container,
     #selected-attacks-container,
     #selected-relationships-container {
-        grid-templat?-columns: repeat(auto-fill, minmax(72px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(72px, 1fr));
         max-height: 260px;
     }
 }
@@ -3093,7 +3093,7 @@ nav {
     }
 
     #cardForm > .flex > div:first-child {
-        grid-templat?-columns: 1fr;
+        grid-template-columns: 1fr;
     }
 
     #character-lore-section {
@@ -3155,7 +3155,7 @@ nav {
 }
 
 .relationships-grid-slide.expanded:hover {
-    animation-play-stat?: paused;
+    animation-play-state: paused;
 }
 
 @media (min-width: 900px) {
@@ -3264,13 +3264,13 @@ nav {
     #spellForm,
     #itemForm {
         display: grid !important;
-        grid-templat?-columns: 230px minmax(0, 1fr) minmax(380px, 0.78fr);
+        grid-template-columns: 230px minmax(0, 1fr) minmax(380px, 0.78fr);
         align-items: start;
     }
 
     #spellForm,
     #itemForm {
-        grid-templat?-columns: 210px minmax(0, 1fr) minmax(420px, 0.82fr);
+        grid-template-columns: 210px minmax(0, 1fr) minmax(420px, 0.82fr);
     }
 
     #cardForm > .flex:first-child,
@@ -3348,7 +3348,7 @@ nav {
         grid-column: 3;
         grid-row: 1;
         display: grid;
-        grid-templat?-columns: 1fr;
+        grid-template-columns: 1fr;
     }
 
     #cardForm > .grid:not(#character-lore-section):not(#character-relations-section) {
@@ -3383,7 +3383,7 @@ nav {
     #spell-inline-related-sections,
     #item-inline-related-sections {
         display: grid;
-        grid-templat?-columns: repeat(2, minmax(0, 1fr));
+        grid-template-columns: repeat(2, minmax(0, 1fr));
         gap: 1rem;
     }
 
@@ -3400,7 +3400,7 @@ nav {
     #spell-inline-related-sections [data-inline-related-role] > .flex,
     #item-inline-related-sections [data-inline-related-role] > .flex {
         display: grid !important;
-        grid-templat?-columns: 128px minmax(0, 1fr);
+        grid-template-columns: 128px minmax(0, 1fr);
         gap: 1rem;
         align-items: start;
     }
@@ -3493,7 +3493,7 @@ nav {
     #spell-inline-related-sections,
     #item-inline-related-sections {
         display: grid !important;
-        grid-templat?-columns: 1fr !important;
+        grid-template-columns: 1fr !important;
         grid-column: auto !important;
         grid-row: auto !important;
     }
@@ -3569,7 +3569,7 @@ nav {
 
 .receiver-icon-picker {
     display: grid;
-    grid-templat?-columns: repeat(auto-fit, minmax(5.2rem, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(5.2rem, 1fr));
     gap: 0.35rem;
     width: 100%;
 }
@@ -3631,4 +3631,5 @@ nav {
 
             transition: color 0.3s ease, text-shadow 0.3s ease;
         }
+
 

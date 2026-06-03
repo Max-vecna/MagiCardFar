@@ -1251,8 +1251,10 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
         grid.querySelectorAll('.character-collection-mini-card').forEach(item => {
             const sheet = item.querySelector('.arena-model-card');
             if (!sheet) return;
-            const sheetWidth = sheet.clientWidth;
-            const sheetHeight = sheet.clientHeight;
+            const modelWidth = Number(sheet.dataset.arenaModelWidth);
+            const modelHeight = Number(sheet.dataset.arenaModelHeight);
+            const sheetWidth = modelWidth > 0 ? modelWidth : sheet.clientWidth;
+            const sheetHeight = modelHeight > 0 ? modelHeight : sheet.clientHeight;
             const targetWidth = item.clientWidth;
             if (sheetWidth <= 0 || sheetHeight <= 0 || targetWidth <= 0) return;
             const scale = targetWidth / sheetWidth;
@@ -1262,6 +1264,9 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
             item.style.setProperty('--collection-card-scaled-height', `${scaledHeight}px`);
             item.style.height = `${scaledHeight + captionHeight}px`;
             item.style.position = 'relative';
+            sheet.style.width = `${sheetWidth}px`;
+            sheet.style.height = `${sheetHeight}px`;
+            sheet.style.margin = '0';
             sheet.style.transform = `scale(${scale})`;
             sheet.style.transformOrigin = 'top left';
         });
