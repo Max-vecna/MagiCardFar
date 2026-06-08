@@ -10,13 +10,11 @@ import { renderFullItemSheet } from './item_renderer.js';
 import { clearArenaModelTemplates, hasArenaModel, seedArenaModelTemplatesFromLocalData } from './arena_model_renderer.js';
 import { showCustomAlert, showCustomConfirm } from './ui_utils.js';
 import { bufferToBlob } from './ui_utils.js';
-import { createEffectCardsModule } from './nova-ficha/modules/effect-cards/index.js';
 
 let renderContent;
 const viewCache = {};
 let contentDisplay;
 let mainContainer;
-let effectCardsModule;
 
 export function isCombatActive() {
     return false;
@@ -36,6 +34,52 @@ const MENU_ACTION_LABELS = {
     'export-json': 'exportar',
     'reset-arena-model': 'voltar ao visual original'
 };
+
+const EFFECT_FORM_CONFIGS = {
+    magias: {
+        dataType: 'magia',
+        createTitle: 'Nova Magia',
+        createSubmitText: 'Criar Magia',
+        hideManaCost: false
+    },
+    habilidades: {
+        dataType: 'habilidade',
+        createTitle: 'Nova Habilidade',
+        createSubmitText: 'Criar Habilidade',
+        hideManaCost: true
+    },
+    ataques: {
+        dataType: 'ataque',
+        createTitle: 'Novo Ataque',
+        createSubmitText: 'Criar Ataque',
+        hideManaCost: true
+    }
+};
+
+const EFFECT_VIEW_BY_ACTION = {
+    'add-spell': 'magias',
+    'add-habilidade': 'habilidades',
+    'add-attack': 'ataques'
+};
+
+function getEffectFormConfigFromAction(action) {
+    return EFFECT_FORM_CONFIGS[EFFECT_VIEW_BY_ACTION[action]] || EFFECT_FORM_CONFIGS.magias;
+}
+
+function applyEffectFormChrome(elements, config) {
+    if (elements.form) elements.form.dataset.type = config.dataType;
+    if (elements.title) elements.title.textContent = config.createTitle;
+    if (elements.submitButton) elements.submitButton.textContent = config.createSubmitText;
+    document.getElementById('mana-cost-wrapper')?.classList.toggle('hidden', config.hideManaCost);
+}
+
+async function prepareEffectFormCreate(elements, config) {
+    resetSpellFormState();
+    applyEffectFormChrome(elements, config);
+    populateSpellAumentosSelect();
+    await populateCharacterSelect('spellCharacterOwner');
+    await populateCategorySelect('spell-category-select', config.dataType);
+}
 
 function cardHasArenaLayout(card) {
     return Boolean(card && hasArenaModel(card));
@@ -1293,7 +1337,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const spellForm = document.getElementById('spellForm');
     const spellFormTitle = document.getElementById('spell-form-title');
     const spellSubmitButton = document.getElementById('spellSubmitButton');
-    const spellRelatedWrapper = document.getElementById('spell-related-wrapper');
 
     const itemForm = document.getElementById('itemForm');
     const itemFormTitle = document.getElementById('item-form-title');
@@ -1310,35 +1353,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     const exportImagesBtn = document.getElementById('export-images-btn');
     const exportImagesBtnMobile = document.getElementById('export-images-btn-mobile');
 
-    effectCardsModule = createEffectCardsModule({
-        list: {
-            getData,
-            renderSheet: renderFullSpellSheet,
-            importEffect: importSpell,
-            showAlert: showCustomAlert,
-            createBulkDeleteToolbar,
-            setupBulkDeleteControls,
-            addBulkSelectorToCard,
-            cardHasArenaLayout,
-            getGridBaseCards,
-            renderContent: (target, force) => renderContent?.(target, force)
-        },
-        form: {
-            section: spellCreationSection,
-            form: spellForm,
-            title: spellFormTitle,
-            submitButton: spellSubmitButton,
-            relatedWrapper: spellRelatedWrapper,
-            showView,
-            resetForm: resetSpellFormState,
-            populateAumentosSelect: populateSpellAumentosSelect,
-            populateCharacterSelect,
-            populateCategorySelect,
-            editEffect: editSpell,
-            saveEffect: saveSpellCard,
-            getData
-        }
-    });
+    const effectFormElements = {
+        section: spellCreationSection,
+        form: spellForm,
+        title: spellFormTitle,
+        submitButton: spellSubmitButton
+    };
+
 
     const executeCardMenuAction = async (action, cardId, cardType, activeNav) => {
         if (action === 'edit') {
@@ -1346,7 +1367,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 showView(creationSection, true);
                 await editCard(cardId);
             } else if (cardType === 'spell' || cardType === 'attack') {
-                await effectCardsModule.openEdit(cardId, cardType);
+                showView(spellCreationSection, true);
+                resetSpellFormState();
+                await editSpell(cardId);
             } else if (cardType === 'item') {
                 itemFormTitle.textContent = 'Editando Item';
                 itemSubmitButton.textContent = 'Salvar Item';
@@ -1462,7 +1485,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (target === 'personagem') await renderCharacterList(viewContainer, 'character');
             else if (target === 'criaturas') await renderCharacterList(viewContainer, 'creature');
-            else if (target === 'magias' || target === 'habilidades' || target === 'ataques') await effectCardsModule.renderList(viewContainer, target);
+            else if (target === 'magias' || target === 'habilidades') await renderSpellList(viewContainer, target);
+            else if (target === 'ataques') await renderAttackList(viewContainer);
             else if (target === 'itens') await renderItemList(viewContainer);
             else if (target === 'categorias') await renderCategoryScreen(viewContainer); // Precisa atualizar category_manager.js
             else if (target === 'grimorio') await renderGrimoireScreen(viewContainer); // Precisa atualizar grimoire_manager.js
@@ -1567,7 +1591,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             setCharacterFormType('creature');
         });
         if (action === "add-spell" || action === "add-habilidade" || action === "add-attack") {
-            effectCardsModule.openCreateFromAction(action);
+            const config = getEffectFormConfigFromAction(action);
+            showView(spellCreationSection, false, () => prepareEffectFormCreate(effectFormElements, config));
         }
         if (action === "add-item") showView(itemCreationSection, false, async () => {
             resetItemFormState();
@@ -1620,7 +1645,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     spellForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const result = await effectCardsModule.saveCurrentForm();
+        const result = await saveSpellCard(spellForm, spellForm.dataset.type || 'magia');
         if (!result?.keepOpen) {
             await closeForm(spellCreationSection);
         }
