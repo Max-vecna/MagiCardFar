@@ -10,11 +10,13 @@ import { renderFullItemSheet } from './item_renderer.js';
 import { clearArenaModelTemplates, hasArenaModel, seedArenaModelTemplatesFromLocalData } from './arena_model_renderer.js';
 import { showCustomAlert, showCustomConfirm } from './ui_utils.js';
 import { bufferToBlob } from './ui_utils.js';
+import { createEffectCardsModule } from './nova-ficha/modules/effect-cards/index.js';
 
 let renderContent;
 const viewCache = {};
 let contentDisplay;
 let mainContainer;
+let effectCardsModule;
 
 export function isCombatActive() {
     return false;
@@ -1308,46 +1310,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     const exportImagesBtn = document.getElementById('export-images-btn');
     const exportImagesBtnMobile = document.getElementById('export-images-btn-mobile');
 
+    effectCardsModule = createEffectCardsModule({
+        list: {
+            getData,
+            renderSheet: renderFullSpellSheet,
+            importEffect: importSpell,
+            showAlert: showCustomAlert,
+            createBulkDeleteToolbar,
+            setupBulkDeleteControls,
+            addBulkSelectorToCard,
+            cardHasArenaLayout,
+            getGridBaseCards,
+            renderContent: (target, force) => renderContent?.(target, force)
+        },
+        form: {
+            section: spellCreationSection,
+            form: spellForm,
+            title: spellFormTitle,
+            submitButton: spellSubmitButton,
+            relatedWrapper: spellRelatedWrapper,
+            showView,
+            resetForm: resetSpellFormState,
+            populateAumentosSelect: populateSpellAumentosSelect,
+            populateCharacterSelect,
+            populateCategorySelect,
+            editEffect: editSpell,
+            saveEffect: saveSpellCard,
+            getData
+        }
+    });
+
     const executeCardMenuAction = async (action, cardId, cardType, activeNav) => {
         if (action === 'edit') {
             if (cardType === 'character' || cardType === 'creature') {
                 showView(creationSection, true);
                 await editCard(cardId);
-            } else if (cardType === 'spell') {
-                const spellData = await getData('rpgEffects', cardId);
-                if (spellData) {
-                    const isHabilidade = spellData.type === 'habilidade';
-                    const isAtaque = spellData.type === 'ataque';
-                    spellForm.dataset.type = spellData.type || 'magia';
-                    if (isAtaque) {
-                        spellFormTitle.textContent = 'Editando Ataque';
-                        spellSubmitButton.textContent = 'Salvar Ataque';
-                        document.getElementById('mana-cost-wrapper').classList.add('hidden');
-                    } else {
-                        spellFormTitle.textContent = isHabilidade ? 'Editando Habilidade' : 'Editando Magia';
-                        spellSubmitButton.textContent = isHabilidade ? 'Salvar Habilidade' : 'Salvar Magia';
-                        document.getElementById('mana-cost-wrapper').classList.toggle('hidden', isHabilidade);
-                    }
-
-                    spellRelatedWrapper?.classList.remove('hidden');
-                    showView(spellCreationSection, true);
-                    resetSpellFormState();
-                    await editSpell(cardId);
-                }
+            } else if (cardType === 'spell' || cardType === 'attack') {
+                await effectCardsModule.openEdit(cardId, cardType);
             } else if (cardType === 'item') {
                 itemFormTitle.textContent = 'Editando Item';
                 itemSubmitButton.textContent = 'Salvar Item';
                 showView(itemCreationSection, true);
                 await editItem(cardId);
-            } else if (cardType === 'attack') {
-                spellForm.dataset.type = 'ataque';
-                spellFormTitle.textContent = 'Editando Ataque';
-                spellSubmitButton.textContent = 'Salvar Ataque';
-                document.getElementById('mana-cost-wrapper').classList.add('hidden');
-                spellRelatedWrapper?.classList.remove('hidden');
-                showView(spellCreationSection, true);
-                resetSpellFormState();
-                await editSpell(cardId);
             }
         } else if (action === 'remove' || action === 'delete') {
             let storeName;
@@ -1458,10 +1462,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             if (target === 'personagem') await renderCharacterList(viewContainer, 'character');
             else if (target === 'criaturas') await renderCharacterList(viewContainer, 'creature');
-            else if (target === 'magias') await renderSpellList(viewContainer, 'magias');
-            else if (target === 'habilidades') await renderSpellList(viewContainer, 'habilidades');
+            else if (target === 'magias' || target === 'habilidades' || target === 'ataques') await effectCardsModule.renderList(viewContainer, target);
             else if (target === 'itens') await renderItemList(viewContainer);
-            else if (target === 'ataques') await renderAttackList(viewContainer);
             else if (target === 'categorias') await renderCategoryScreen(viewContainer); // Precisa atualizar category_manager.js
             else if (target === 'grimorio') await renderGrimoireScreen(viewContainer); // Precisa atualizar grimoire_manager.js
             else if (target === 'personagem-em-jogo') await renderCharacterInGame(viewContainer);
@@ -1564,18 +1566,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             resetCharacterFormState();
             setCharacterFormType('creature');
         });
-         if (action === "add-spell" || action === "add-habilidade") showView(spellCreationSection, false, async () => {
-            const isHabilidade = action === "add-habilidade";
-            resetSpellFormState();
-            spellForm.dataset.type = isHabilidade ? 'habilidade' : 'magia';
-            spellFormTitle.textContent = isHabilidade ? 'Nova Habilidade' : 'Nova Magia';
-            spellSubmitButton.textContent = isHabilidade ? 'Criar Habilidade' : 'Criar Magia';
-            document.getElementById('mana-cost-wrapper').classList.toggle('hidden', isHabilidade);
-            spellRelatedWrapper?.classList.remove('hidden');
-            populateSpellAumentosSelect();
-            await populateCharacterSelect('spellCharacterOwner');
-            await populateCategorySelect('spell-category-select', isHabilidade ? 'habilidade' : 'magia');
-        });
+        if (action === "add-spell" || action === "add-habilidade" || action === "add-attack") {
+            effectCardsModule.openCreateFromAction(action);
+        }
         if (action === "add-item") showView(itemCreationSection, false, async () => {
             resetItemFormState();
             itemFormTitle.textContent = 'Novo Item';
@@ -1583,17 +1576,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             populateItemAumentosSelect();
             await populateCharacterSelect('itemCharacterOwner');
             await populateCategorySelect('item-category-select', 'item');
-        });
-        if (action === "add-attack") showView(spellCreationSection, false, async () => {
-            resetSpellFormState();
-            spellForm.dataset.type = 'ataque';
-            spellFormTitle.textContent = 'Novo Ataque';
-            spellSubmitButton.textContent = 'Criar Ataque';
-            document.getElementById('mana-cost-wrapper').classList.add('hidden');
-            spellRelatedWrapper?.classList.remove('hidden');
-            populateSpellAumentosSelect();
-            await populateCharacterSelect('spellCharacterOwner');
-            await populateCategorySelect('spell-category-select', 'ataque');
         });
         if (e.target.closest('#select-character-btn')) showCharacterSelectionModalForPlay();
     });
@@ -1638,8 +1620,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     spellForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const type = e.currentTarget.dataset.type || 'magia';
-        const result = await saveSpellCard(spellForm, type);
+        const result = await effectCardsModule.saveCurrentForm();
         if (!result?.keepOpen) {
             await closeForm(spellCreationSection);
         }

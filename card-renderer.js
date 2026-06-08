@@ -1228,7 +1228,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
 
                 const sheetWidth = sheet.clientWidth;
                 const sheetHeight = sheet.clientHeight;
-                const targetWidth = item.clientWidth;
+                const targetWidth = Math.max(item.clientWidth - 10, 0);
                 if (sheetWidth > 0 && sheetHeight > 0 && targetWidth > 0) {
                     const scale = targetWidth / sheetWidth;
                     const scaledHeight = sheetHeight * scale;
@@ -1255,7 +1255,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
             const modelHeight = Number(sheet.dataset.arenaModelHeight);
             const sheetWidth = modelWidth > 0 ? modelWidth : sheet.clientWidth;
             const sheetHeight = modelHeight > 0 ? modelHeight : sheet.clientHeight;
-            const targetWidth = item.clientWidth;
+            const targetWidth = Math.max(item.clientWidth - 10, 0);
             if (sheetWidth <= 0 || sheetHeight <= 0 || targetWidth <= 0) return;
             const scale = targetWidth / sheetWidth;
             const scaledHeight = sheetHeight * scale;
