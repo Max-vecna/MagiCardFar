@@ -3,6 +3,7 @@ import { renderFullItemSheet } from './renderer-item-card.js';
 import { renderFullSpellSheet, renderFullAttackSheet } from './renderer-magic-card.js';
 import { hasArenaModel, renderArenaModelSheet } from './renderer-arena-model.js';
 import { applyDarkModalBackdrop, bufferToBlob, renderCompactCardPreview, shrinkExpandedCardSize, showCustomAlert } from './ui-utils.js';
+import { calculateCharacterClassResources } from './config-character-classes.js';
 
 const PERICIAS_DATA = {
      "AGILIDADE": [ "Acrobacia", "Iniciativa", "Montaria", "Furtividade", "Pontaria", "Ladinagem", "Reflexos"],
@@ -963,8 +964,9 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
         `
         : '';
 
-    const permanentMaxVida = (characterData.attributes.vida || 0) + (totalFixedBonuses.vida || 0);
-    const permanentMaxMana = (characterData.attributes.mana || 0) + (totalFixedBonuses.mana || 0);
+    const { vidaBase, manaBase } = calculateClassStats(characterData);
+    const permanentMaxVida = vidaBase + (totalFixedBonuses.vida || 0);
+    const permanentMaxMana = manaBase + (totalFixedBonuses.mana || 0);
     const heartIconStyle = serializeCssVariables(getHeartVisualVariables(characterData.attributes.vidaAtual, permanentMaxVida));
     const manaIconStyle = serializeCssVariables(getManaVisualVariables(characterData.attributes.manaAtual, permanentMaxMana));
 
@@ -1775,36 +1777,18 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
 }
 
 function calculateClassStats(characterData) {
-    const level = parseInt(characterData.level) || 1;
-    const vig = parseInt(characterData.attributes.vigor) || 0;
-    const sab = parseInt(characterData.attributes.sabedoria) || 0;
-    const car = parseInt(characterData.attributes.carisma) || 0;
+    const calculated = calculateCharacterClassResources({
+        classe: characterData.classe || 'mago',
+        level: characterData.level,
+        attributes: characterData.attributes || {}
+    });
 
-    const classe = characterData.classe || 'mago';
-
-    let vidaBase = 0;
-    let manaBase = 0;
-
-    switch (classe) {
-        case 'mago':
-            vidaBase = 12 + vig + ((level - 1) * (3 + vig));
-            manaBase = 6 + sab + ((level - 1) * (4 + sab));
-            break;
-
-        case 'bardo':
-            vidaBase = 12 + vig + ((level - 1) * (4 + vig));
-            manaBase = 2 + car + ((level - 1) * (2 + car));
-            break;
-
-        case 'paladino':
-            vidaBase = 20 + vig + ((level - 1) * (4 + vig));
-            manaBase = 4 + sab + ((level - 1) * (2 + sab));
-            break;
-
-        default:
-            vidaBase = 10 + vig;
-            manaBase = 5 + sab;
+    if (calculated) {
+        return { vidaBase: calculated.vidaMax, manaBase: calculated.manaMax };
     }
 
-    return { vidaBase, manaBase };
+    return {
+        vidaBase: parseInt(characterData.attributes?.vida, 10) || 0,
+        manaBase: parseInt(characterData.attributes?.mana, 10) || 0
+    };
 }

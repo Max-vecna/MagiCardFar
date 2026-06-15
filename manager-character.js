@@ -3,6 +3,7 @@ import { renderInventoryForForm } from './manager-item.js';
 import { openSelectionModal as openItemSelectionModal } from './app-navigation.js';
 import { isArenaModelTemplatePayload, saveArenaModelTemplateFromCard } from './renderer-arena-model.js';
 import { readFileAsArrayBuffer, bufferToBlob, arrayBufferToBase64, base64ToArrayBuffer, showImagePreview, calculateColor, showCustomConfirm, renderCompactCardPreview } from './ui-utils.js';
+import { CHARACTER_CLASS_OPTIONS, calculateCharacterClassResources, getCharacterClassConfig, normalizeCharacterClassId } from './config-character-classes.js';
 
 const PERICIAS_DATA = {
     "AGILIDADE": { "Acrobacia": "...", "Iniciativa": "...", "Montaria": "...", "Furtividade": "...", "Pontaria": "...", "Ladinagem": "...", "Reflexos": "..." },
@@ -11,12 +12,6 @@ const PERICIAS_DATA = {
     "FORÇA": { "Atletismo": "...", "Luta": "..." },
     "SABEDORIA": { "Intuição": "...", "Percepção": "...", "Medicina": "...", "Natureza": "...", "Sobrevivência": "...", "Vontade": "..." },
     "VIGOR": { "Fortitude": "..." }
-};
-
-const CLASS_FORMULAS = {
-    mago: { hpBase: 12, hpGain: 3, mpBase: 6, mpGain: 4, mpAttr: 'sabedoria' },
-    bardo: { hpBase: 12, hpGain: 4, mpBase: 2, mpGain: 2, mpAttr: 'carisma' },
-    paladino: { hpBase: 20, hpGain: 4, mpBase: 4, mpGain: 2, mpAttr: 'sabedoria' }
 };
 
 let currentEditingCardId = null;
@@ -31,21 +26,6 @@ function toInt(value) {
     return Number.isFinite(n) ? n : null;
 }
 
-function calcMaxVidaMana({ classe, level, vigor, sabedoria, carisma }) {
-    const cfg = CLASS_FORMULAS[classe];
-    if (!cfg) return null;
-
-    const L = Math.max(1, level ?? 1);
-    const VIG = vigor ?? 0;
-
-    const mpAttrValue = cfg.mpAttr === 'sabedoria' ? (sabedoria ?? 0) : (carisma ?? 0);
-
-    const vidaMax = (cfg.hpBase + VIG) + (L - 1) * (cfg.hpGain + VIG);
-    const manaMax = (cfg.mpBase + mpAttrValue) + (L - 1) * (cfg.mpGain + mpAttrValue);
-
-    return { vidaMax: Math.max(0, vidaMax), manaMax: Math.max(0, manaMax) };
-}
-
 function escapeHtml(value) {
     return String(value ?? '')
         .replace(/&/g, '&amp;')
@@ -55,35 +35,57 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function populateClassSelectOptions() {
+    const classSelect = document.getElementById('cardClass');
+    if (!classSelect) return;
+
+    const currentValue = normalizeCharacterClassId(classSelect.value);
+    classSelect.innerHTML = '<option value="">Selecione</option>';
+
+    CHARACTER_CLASS_OPTIONS.forEach(({ value, label }) => {
+        const option = document.createElement('option');
+        option.value = value;
+        option.textContent = label;
+        classSelect.appendChild(option);
+    });
+
+    classSelect.value = currentValue;
+}
+
 function updateDerivedStatsInForm() {
     const classSelect = document.getElementById('cardClass');
     const levelInput = document.getElementById('cardLevel');
     const vigorInput = document.getElementById('vigor');
     const sabedoriaInput = document.getElementById('sabedoria');
     const carismaInput = document.getElementById('carisma');
+    const inteligenciaInput = document.getElementById('inteligencia');
 
     const vidaInput = document.getElementById('vida');
     const manaInput = document.getElementById('mana');
     const vidaAtualInput = document.getElementById('vidaAtual');
     const manaAtualInput = document.getElementById('manaAtual');
 
-    if (!classSelect || !levelInput || !vigorInput || !sabedoriaInput || !carismaInput || !vidaInput || !manaInput) return;
+    if (!classSelect || !levelInput || !vigorInput || !sabedoriaInput || !carismaInput || !inteligenciaInput || !vidaInput || !manaInput) return;
 
-    const classe = classSelect.value;
+    const classe = normalizeCharacterClassId(classSelect.value);
     const level = toInt(levelInput.value);
     const vigor = toInt(vigorInput.value);
-    const sabedoria = toInt(sabedoriaInput.value);
-    const carisma = toInt(carismaInput.value);
 
     if (!classe || level === null || vigor === null) return;
 
-    const cfg = CLASS_FORMULAS[classe];
+    const cfg = getCharacterClassConfig(classe);
     if (!cfg) return;
 
-    if (cfg.mpAttr === 'sabedoria' && sabedoria === null) return;
-    if (cfg.mpAttr === 'carisma' && carisma === null) return;
+    const attributes = {
+        vigor,
+        sabedoria: toInt(sabedoriaInput.value),
+        carisma: toInt(carismaInput.value),
+        inteligencia: toInt(inteligenciaInput.value)
+    };
 
-    const result = calcMaxVidaMana({ classe, level, vigor, sabedoria, carisma });
+    if (attributes[cfg.mana.attr] === null) return;
+
+    const result = calculateCharacterClassResources({ classe, level, attributes });
     if (!result) return;
 
     vidaInput.value = result.vidaMax;
@@ -254,7 +256,7 @@ async function restoreCharacterFormSnapshot(snapshot, options = {}) {
     document.getElementById('cardSubTitle').value = snapshot.subTitle || '';
     document.getElementById('cardLevel').value = snapshot.level || '';
     document.getElementById('dinheiro').value = snapshot.dinheiro || '';
-    document.getElementById('cardClass').value = snapshot.classe || '';
+    document.getElementById('cardClass').value = normalizeCharacterClassId(snapshot.classe);
 
     document.getElementById('vida').value = snapshot.vida || '';
     document.getElementById('mana').value = snapshot.mana || '';
@@ -801,7 +803,7 @@ export async function saveCharacterCard(cardForm) {
             ...(relatedCreationContext?.baseCardId ? [relatedCreationContext.baseCardId] : [])
         ]));
 
-    const classe = cardClassSelect ? cardClassSelect.value : '';
+    const classe = cardClassSelect ? normalizeCharacterClassId(cardClassSelect.value) : '';
 
     let cardData;
     if (currentEditingCardId) {
@@ -899,7 +901,7 @@ export async function editCard(cardId) {
     document.getElementById('dinheiro').value = cardData.dinheiro || 0;
 
     const classSelect = document.getElementById('cardClass');
-    if (classSelect) classSelect.value = cardData.classe || '';
+    if (classSelect) classSelect.value = normalizeCharacterClassId(cardData.classe);
 
     const attrs = cardData.attributes;
     document.getElementById('vida').value = attrs.vida;
@@ -1184,7 +1186,9 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    const watchIds = ['cardClass', 'cardLevel', 'vigor', 'sabedoria', 'carisma'];
+    populateClassSelectOptions();
+
+    const watchIds = ['cardClass', 'cardLevel', 'vigor', 'sabedoria', 'carisma', 'inteligencia'];
     watchIds.forEach(id => {
         const el = document.getElementById(id);
         if (!el) return;
