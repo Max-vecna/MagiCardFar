@@ -44,12 +44,22 @@ window.addEventListener('load', () => {
 document.addEventListener('DOMContentLoaded', () => {
     const splashScreen = document.getElementById('splash-screen');
     const mainContent = document.getElementById('main-content');
+    const minSplashDelay = new Promise(resolve => setTimeout(resolve, 1200));
+    const appReady = new Promise(resolve => {
+        if (window.__fichaLimpaReady) {
+            resolve();
+            return;
+        }
 
-    setTimeout(() => {
+        document.addEventListener('fichaLimpaReady', resolve, { once: true });
+        setTimeout(resolve, 10000);
+    });
+
+    Promise.all([minSplashDelay, appReady]).then(() => {
         if (splashScreen) splashScreen.classList.add('hidden');
         if (mainContent) {
             mainContent.style.visibility = 'visible';
             mainContent.style.opacity = '1';
         }
-    }, 1200);
+    });
 });

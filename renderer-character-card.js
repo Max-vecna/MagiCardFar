@@ -471,6 +471,7 @@ function setupStatEditor(characterData, container) {
             saveData('rpgCards', characterData).then(async () => {
                 await updateStatDisplay(sheetContainer, characterData);
                 closeModal();
+                document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: 'personagem' } }));
             }).catch(err => {
                 console.error("Failed to save character data:", err);
                 closeModal();

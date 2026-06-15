@@ -11,9 +11,11 @@ import { clearArenaModelTemplates, hasArenaModel, seedArenaModelTemplatesFromLoc
 import { bufferToBlob, renderCompactCardPreview, showCustomAlert, showCustomConfirm } from './ui-utils.js';
 
 let renderContent;
-const viewCache = {};
 let contentDisplay;
 let mainContainer;
+
+const PRELOAD_VIEW_TARGETS = ['personagem-em-jogo', 'personagem', 'criaturas', 'magias', 'habilidades', 'ataques', 'itens'];
+const IN_PLAY_DEPENDENCY_TYPES = new Set(['personagem', 'itens', 'magias', 'habilidades', 'ataques']);
 
 export function isCombatActive() {
     return false;
@@ -1012,6 +1014,18 @@ function sortCardsByRelationRole(items) {
     });
 }
 
+function createEmptyCardsMessage(message = 'Nao ha cards para serem listados.') {
+    const emptyState = document.createElement('div');
+    emptyState.className = 'w-full min-h-[40vh] flex items-center justify-center p-8 text-center text-gray-400';
+    emptyState.innerHTML = `
+        <div class="rounded-lg border border-dashed border-gray-700 bg-gray-900/30 px-6 py-8">
+            <i class="fas fa-layer-group text-3xl mb-3 text-gray-500"></i>
+            <p class="text-sm font-semibold">${message}</p>
+        </div>
+    `;
+    return emptyState;
+}
+
 async function renderGroupedList({ type, storeName, buttonText, buttonAction, importBtnId, importInputId, importTitle, importFunction, themeColor, unassignedTitle }, container) {
     container.innerHTML = '';
 
@@ -1054,6 +1068,10 @@ async function renderGroupedList({ type, storeName, buttonText, buttonAction, im
         importInputId,
         importTitle
     }));
+
+    if (allItems.length === 0) {
+        pageContainer.appendChild(createEmptyCardsMessage());
+    }
 
     const renderCharacterItems = async (characterName, items, container) => {
         const itemsByCategory = items.reduce((acc, item) => {
@@ -1143,7 +1161,7 @@ async function renderGroupedList({ type, storeName, buttonText, buttonAction, im
                 if (imported?.__arenaModelTemplateOnly) {
                     showCustomAlert('Modelo Arena importado como template. Ele nao sera adicionado como card no grid.');
                 }
-                renderContent(type, true);
+                document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type } }));
              } catch (error) {
                  showCustomAlert(`Erro ao importar ${type}: ${error.message}`);
                  console.error("Import error:", error);
@@ -1174,6 +1192,10 @@ async function renderCharacterList(container, listType = 'character') {
 
     const gridContainer = document.createElement('div');
     gridContainer.className = 'grid gap-4 w-full justify-items-center grid-cols-3 md:grid-cols-4 lg:grid-cols-5 p-6 pt-4';
+
+    if (allCharacters.length === 0) {
+        container.appendChild(createEmptyCardsMessage());
+    }
 
     const cardElements = allCharacters.map((char) => {
         const cardWrapper = document.createElement('div');
@@ -1220,12 +1242,12 @@ async function renderCharacterList(container, listType = 'character') {
                 const imported = await importCard(file, isCreatureList ? 'creature' : 'character');
                 if (imported?.__arenaModelTemplateOnly) {
                     showCustomAlert('Modelo Arena importado como template. Ele nao sera adicionado como card no grid.');
-                    renderContent(isCreatureList ? 'criaturas' : 'personagem', true);
+                    document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: isCreatureList ? 'criaturas' : 'personagem' } }));
                     return;
                 }
                 imported.cardType = isCreatureList ? 'creature' : 'character';
                 await saveData('rpgCards', imported);
-                renderContent(isCreatureList ? 'criaturas' : 'personagem', true);
+                document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: isCreatureList ? 'criaturas' : 'personagem' } }));
             } catch (error) {
                 showCustomAlert(`Erro ao importar ${isCreatureList ? 'criatura' : 'personagem'}: ${error.message}`);
                 console.error("Import error:", error);
@@ -1429,21 +1451,52 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     };
 
-    renderContent = async (target, force = false) => {
-        if (target === 'personagem-em-jogo') force = true;
+    async function renderViewIntoContainer(target, viewContainer) {
+        if (target === 'personagem') await renderCharacterList(viewContainer, 'character');
+        else if (target === 'criaturas') await renderCharacterList(viewContainer, 'creature');
+        else if (target === 'magias' || target === 'habilidades') await renderSpellList(viewContainer, target);
+        else if (target === 'ataques') await renderAttackList(viewContainer);
+        else if (target === 'itens') await renderItemList(viewContainer);
+        else if (target === 'categorias') await renderCategoryScreen(viewContainer);
+        else if (target === 'grimorio') await renderGrimoireScreen(viewContainer);
+        else if (target === 'personagem-em-jogo') await renderCharacterInGame(viewContainer);
+    }
 
-        contentDisplay.classList.remove('justify-center');
-        contentDisplay.removeAttribute('style');
-        Array.from(contentDisplay.children).forEach(child => {
-            child.classList.add('hidden');
-        });
-
+    async function ensureViewRendered(target, force = false) {
         const viewId = `view-${target}`;
         let viewContainer = document.getElementById(viewId);
         if (force && viewContainer) {
             viewContainer.remove();
             viewContainer = null;
         }
+
+        if (!viewContainer) {
+            viewContainer = document.createElement('div');
+            viewContainer.id = viewId;
+            viewContainer.className = 'view-section hidden';
+            contentDisplay.appendChild(viewContainer);
+            await renderViewIntoContainer(target, viewContainer);
+        }
+
+        return viewContainer;
+    }
+
+    async function preloadCachedViews() {
+        for (const target of PRELOAD_VIEW_TARGETS) {
+            try {
+                await ensureViewRendered(target);
+            } catch (error) {
+                console.error(`Erro ao pre-carregar a tela ${target}:`, error);
+            }
+        }
+    }
+
+    renderContent = async (target, force = false) => {
+        contentDisplay.classList.remove('justify-center');
+        contentDisplay.removeAttribute('style');
+        Array.from(contentDisplay.children).forEach(child => {
+            child.classList.add('hidden');
+        });
 
         creationSection.classList.add('hidden');
         spellCreationSection.classList.add('hidden');
@@ -1453,21 +1506,8 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (mainContainer) mainContainer.style.overflowY = 'auto';
             contentDisplay.style.overflowY = 'scroll';
         }
-        if (!viewContainer) {
-            viewContainer = document.createElement('div');
-            viewContainer.id = viewId;
-            viewContainer.className = 'view-section';
-            contentDisplay.appendChild(viewContainer);
 
-            if (target === 'personagem') await renderCharacterList(viewContainer, 'character');
-            else if (target === 'criaturas') await renderCharacterList(viewContainer, 'creature');
-            else if (target === 'magias' || target === 'habilidades') await renderSpellList(viewContainer, target);
-            else if (target === 'ataques') await renderAttackList(viewContainer);
-            else if (target === 'itens') await renderItemList(viewContainer);
-            else if (target === 'categorias') await renderCategoryScreen(viewContainer); // Precisa atualizar manager-category.js
-            else if (target === 'grimorio') await renderGrimoireScreen(viewContainer); // Precisa atualizar manager-grimoire.js
-            else if (target === 'personagem-em-jogo') await renderCharacterInGame(viewContainer);
-        }
+        const viewContainer = await ensureViewRendered(target, force);
         viewContainer.classList.remove('hidden');
         if (target === 'personagem-em-jogo') {
             if (mainContainer) mainContainer.style.overflowY = 'hidden';
@@ -1510,7 +1550,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }));
                         selectedChar.inPlay = true;
                         await saveData('rpgCards', selectedChar);
-                        renderContent('personagem-em-jogo', true);
+                        document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: 'personagem' } }));
                         selectCharacterModal.classList.add('hidden');
                     }
                 });
@@ -1664,12 +1704,20 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    await openDatabase();
-    await seedArenaModelTemplatesFromLocalData();
+    try {
+        await openDatabase();
+        await seedArenaModelTemplatesFromLocalData();
+        await preloadCachedViews();
 
-    const emJogoButtons = document.querySelectorAll('[data-target="personagem-em-jogo"]');
-    emJogoButtons.forEach(btn => btn.classList.add('active'));
-    renderContent('personagem-em-jogo');
+        const emJogoButtons = document.querySelectorAll('[data-target="personagem-em-jogo"]');
+        emJogoButtons.forEach(btn => btn.classList.add('active'));
+        await renderContent('personagem-em-jogo');
+    } catch (error) {
+        console.error('Erro ao iniciar a navegacao:', error);
+    } finally {
+        window.__fichaLimpaReady = true;
+        document.dispatchEvent(new CustomEvent('fichaLimpaReady'));
+    }
 
     const importHandler = () => {
         importDbInput.click();
@@ -1693,7 +1741,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     Array.from(contentDisplay.children).forEach(child => child.remove());
 
                     const activeNav = document.querySelector('.nav-button.active, .desktop-nav-button.active')?.dataset.target || 'personagem-em-jogo';
-                    renderContent(activeNav, true);
+                    await preloadCachedViews();
+                    await renderContent(activeNav);
                 } catch (error) {
                     console.error("Erro ao importar banco de dados:", error);
                     showCustomAlert("Erro ao importar. Verifique se o arquivo é válido.");
@@ -1728,12 +1777,14 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (cachedView) cachedView.remove();
             });
         }
-        if (['personagem', 'itens', 'magias', 'habilidades', 'ataques'].includes(type)) {
+        const affectsInPlay = IN_PLAY_DEPENDENCY_TYPES.has(type);
+        if (affectsInPlay) {
             const cachedInPlayView = document.getElementById('view-personagem-em-jogo');
             if (cachedInPlayView) cachedInPlayView.remove();
         }
-        const activeNav = document.querySelector('.nav-button.active, .desktop-nav-button.active')?.dataset.target;
-        if (activeNav === targetView || activeNav === 'personagem-em-jogo' || (type === 'categorias' && ['magias', 'habilidades', 'itens', 'ataques'].includes(activeNav))) {
+        const activeNav = document.querySelector('.nav-button.active, .desktop-nav-button.active')?.dataset.target || 'personagem-em-jogo';
+        const activeDependsOnCategories = type === 'categorias' && ['magias', 'habilidades', 'itens', 'ataques'].includes(activeNav);
+        if (activeNav === targetView || (activeNav === 'personagem-em-jogo' && affectsInPlay) || activeDependsOnCategories) {
             renderContent(activeNav, true);
         }
     });
