@@ -672,6 +672,12 @@ function openSpellRelatedActionModal(role) {
 
     const closeModal = () => modal.classList.add('hidden');
     title.textContent = `${label} relacionado`;
+    title.classList.remove('text-amber-300');
+    title.classList.add('text-teal-300');
+    createBtn.querySelector('strong').textContent = 'Criar formulario em branco';
+    createBtn.querySelector('span').textContent = 'Novo card relacionado neste conjunto.';
+    linkBtn.querySelector('strong').textContent = 'Relacionar card existente';
+    linkBtn.querySelector('span').textContent = 'Escolher um card ja criado.';
     createBtn.onclick = async () => {
         closeModal();
         await startRelatedSpellCreation(normalizedRole);

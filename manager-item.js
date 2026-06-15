@@ -332,7 +332,7 @@ function renderItemRelatedDraftStatus() {
         const id = document.getElementById(inputId)?.value || '';
         const draft = itemPendingRelatedDrafts[role];
         const label = RELATED_ITEM_ROLE_LABELS[role] || 'Relacionado';
-        const name = draft?.name || (id ? 'Card selecionado' : 'Nenhum card criado');
+        const name = draft?.name || (id ? 'Item selecionado' : 'Nenhum item relacionado');
         return `
             <div class="related-page-status related-page-status--action" data-open-item-related-action="${role}" role="button" tabindex="0">
                 <div>
@@ -406,6 +406,12 @@ function openItemRelatedActionModal(role) {
 
     const closeModal = () => modal.classList.add('hidden');
     title.textContent = `${label} relacionado`;
+    title.classList.remove('text-teal-300');
+    title.classList.add('text-amber-300');
+    createBtn.querySelector('strong').textContent = 'Criar item em branco';
+    createBtn.querySelector('span').textContent = 'Novo item relacionado neste conjunto.';
+    linkBtn.querySelector('strong').textContent = 'Relacionar item existente';
+    linkBtn.querySelector('span').textContent = 'Escolher um item ja criado.';
     createBtn.onclick = async () => {
         closeModal();
         await startRelatedItemCreation(normalizedRole);
@@ -1042,37 +1048,11 @@ async function openBlankRelatedItemForm(snapshot, role) {
 }
 
 export async function startRelatedItemCreation(preferredRole = '') {
-    const targetRelationType = preferredRole === 'true' ? 'true' : 'enhance';
-    const existingId = document.getElementById(targetRelationType === 'true' ? 'itemTrueCardId' : 'itemEnhanceCardId')?.value || '';
-    if (existingId) {
-        showCustomAlert(`O slot ${RELATED_ITEM_ROLE_LABELS[targetRelationType]} ja possui um card. Remova o relacionado atual antes de criar outro.`);
-        return false;
-    }
-
-    const snapshot = await captureItemFormSnapshot();
-    if (!snapshot.currentEditingItemId && !itemBaseDraftId) {
-        itemBaseDraftId = createRecordId();
-        snapshot.draftBaseId = itemBaseDraftId;
-    }
-
-    pendingRelatedItemCreation = {
-        baseItemId: snapshot.currentEditingItemId || '',
-        baseDraftId: itemBaseDraftId || snapshot.draftBaseId || '',
-        baseName: snapshot.name || 'card base',
-        baseSnapshot: snapshot,
-        targetRelationType,
-        useBaseImage: true,
-        storeAsDraft: !snapshot.currentEditingItemId
-    };
-
-    await openBlankRelatedItemForm(snapshot, targetRelationType);
-    return true;
+    return false;
 }
 
 export async function handleItemFormCloseRequest() {
-    if (!pendingRelatedItemCreation) return false;
-    await restoreBaseItemDraft();
-    return true;
+    return false;
 }
 
 export function resetItemFormState(preserveRelatedCreation = false) {
@@ -1113,21 +1093,14 @@ export function resetItemFormState(preserveRelatedCreation = false) {
 }
 
 export async function saveItemCard(itemForm) {
-    const relatedCreationContext = pendingRelatedItemCreation;
     const itemNameInput = document.getElementById('itemName');
     const itemDescriptionInput = document.getElementById('itemDescription');
-    const itemEnhanceTextInput = document.getElementById('itemEnhanceText');
-    const itemTrueTextInput = document.getElementById('itemTrueText');
     const itemTypeInput = document.getElementById('itemType');
     const itemDamageInput = document.getElementById('itemDamage');
     const itemChargeInput = document.getElementById('itemCharge');
     const itemPrerequisiteInput = document.getElementById('itemPrerequisite');
     const itemCharacterOwnerInput = document.getElementById('itemCharacterOwner');
     const itemCategorySelect = document.getElementById('item-category-select');
-    const itemRoleSelect = document.getElementById('item-card-role');
-    const itemBaseCardSelect = document.getElementById('item-base-card-select');
-    const itemEnhanceCardInput = document.getElementById('itemEnhanceCardId');
-    const itemTrueCardInput = document.getElementById('itemTrueCardId');
     const itemAcertoInput = document.getElementById('itemAcerto');
     const itemCriticoInput = document.getElementById('itemcritico');
     const itemDanoSemManaInput = document.getElementById('itemDanoSemMana');
@@ -1153,53 +1126,26 @@ export async function saveItemCard(itemForm) {
     const previousRelation = existingData ? resolveItemRole(existingData, allItems) : { role: 'base', baseCardId: '' };
     const previousEnhanceCardId = existingData?.enhanceCardId || '';
     const previousTrueCardId = existingData?.trueCardId || '';
-    const cardVariant = normalizeItemRole(itemRoleSelect?.value);
-    const baseCardId = cardVariant === 'base' ? '' : (itemBaseCardSelect?.value || relatedCreationContext?.baseItemId || relatedCreationContext?.baseDraftId || '');
+    const cardVariant = 'base';
+    const baseCardId = '';
     const trueSchool = '';
     const receiverIconSelection = readReceiverIconControls('item');
 
-    if (cardVariant !== 'base' && !baseCardId) {
-        showCustomAlert('Escolha um card base para este item.');
-        return { keepOpen: true };
-    }
-
-    const baseImageSource = relatedCreationContext?.useBaseImage
-        ? getRelatedItemBaseImage(relatedCreationContext.baseSnapshot)
-        : null;
     const imageBuffer = itemImageFile
         ? await readFileAsArrayBufferUtil(itemImageFile)
-        : (baseImageSource?.isFile
-            ? await readFileAsArrayBufferUtil(baseImageSource.image)
-            : (baseImageSource?.image || (existingData ? existingData.image : null)));
+        : (existingData ? existingData.image : null);
     const imageMimeType = itemImageFile
         ? itemImageFile.type
-        : (baseImageSource?.mimeType || (existingData ? existingData.imageMimeType : null));
+        : (existingData ? existingData.imageMimeType : null);
 
     let itemData;
-    const itemId = currentEditingItemId ? currentEditingItemId : (relatedCreationContext ? createRecordId() : (itemBaseDraftId || createRecordId()));
-    const inlineRelatedRoles = getItemInlineRelatedRoles(cardVariant);
-    const inlineRelatedIds = inlineRelatedRoles.reduce((acc, role) => {
-        acc[role] = createRecordId();
-        return acc;
-    }, {});
-    const inlineRelatedPayloads = await collectItemInlineRelatedPayloads(inlineRelatedRoles, itemId, inlineRelatedIds, imageBuffer, imageMimeType);
-    if (!inlineRelatedPayloads) {
-        return { keepOpen: true };
-    }
-    const finalEnhanceCardId = cardVariant === 'base'
-        ? (inlineRelatedIds.enhance || itemEnhanceCardInput?.value || itemPendingRelatedDrafts.enhance?.id || '')
-        : '';
-    const finalTrueCardId = cardVariant === 'base'
-        ? (inlineRelatedIds.true || itemTrueCardInput?.value || itemPendingRelatedDrafts.true?.id || '')
-        : '';
-    const hasEnhanceRelation = Boolean(finalEnhanceCardId);
-    const hasTrueRelation = Boolean(finalTrueCardId);
+    const itemId = currentEditingItemId ? currentEditingItemId : createRecordId();
 
     const baseData = {
         name: itemNameInput.value,
         effect: itemDescriptionInput.value,
-        enhance: cardVariant === 'base' && !hasEnhanceRelation ? (itemEnhanceTextInput?.value || '') : '',
-        true: cardVariant === 'base' && !hasTrueRelation ? (itemTrueTextInput?.value || '') : '',
+        enhance: '',
+        true: '',
         type: itemTypeInput.value,
         damage: itemDamageInput.value,
         charge: itemChargeInput.value,
@@ -1209,8 +1155,8 @@ export async function saveItemCard(itemForm) {
         cardVariant,
         trueSchool,
         baseCardId,
-        enhanceCardId: finalEnhanceCardId,
-        trueCardId: finalTrueCardId,
+        enhanceCardId: '',
+        trueCardId: '',
         acerto: itemAcertoInput.value, // Salvando acerto
         critico: itemCriticoInput ? itemCriticoInput.value : '',
         danoSemMana: itemDanoSemManaInput ? itemDanoSemManaInput.value : '',
@@ -1234,12 +1180,6 @@ export async function saveItemCard(itemForm) {
 
     itemData.predominantColor = await calculateColorUtil(itemData.image, itemData.imageMimeType, { color30: 'rgba(217, 119, 6, 0.3)', color100: 'rgb(217, 119, 6)' });
 
-    if (relatedCreationContext?.storeAsDraft) {
-        itemPendingRelatedDrafts[cardVariant] = itemData;
-        await restoreBaseItemDraft(itemData.id);
-        return { keepOpen: true };
-    }
-
     await saveData('rpgItems', itemData);
     let characterRelationChanged = await syncItemOwnerToCharacter(itemData, cardVariant, baseCardId, allItems);
     if (cardVariant === 'base') {
@@ -1252,27 +1192,6 @@ export async function saveItemCard(itemForm) {
         );
     }
     await syncBaseItemRelation(itemData, cardVariant, baseCardId, previousRelation.baseCardId);
-
-    if (cardVariant === 'base') {
-        for (const role of RELATED_ITEM_ROLES) {
-            const relatedDraft = itemPendingRelatedDrafts[role];
-            const selectedId = role === 'true' ? itemData.trueCardId : itemData.enhanceCardId;
-            if (!relatedDraft || String(relatedDraft.id || '') !== String(selectedId || '')) continue;
-            relatedDraft.baseCardId = itemData.id;
-            relatedDraft.predominantColor = await calculateColorUtil(relatedDraft.image, relatedDraft.imageMimeType, { color30: 'rgba(217, 119, 6, 0.3)', color100: 'rgb(217, 119, 6)' });
-            await saveData('rpgItems', relatedDraft);
-            await syncBaseItemRelation(relatedDraft, role, itemData.id);
-            characterRelationChanged = await syncItemOwnerToCharacter(relatedDraft, role, itemData.id, allItems) || characterRelationChanged;
-        }
-    }
-
-    for (const payload of inlineRelatedPayloads) {
-        const relatedItemData = payload.data;
-        relatedItemData.predominantColor = await calculateColorUtil(relatedItemData.image, relatedItemData.imageMimeType, { color30: 'rgba(217, 119, 6, 0.3)', color100: 'rgb(217, 119, 6)' });
-        await saveData('rpgItems', relatedItemData);
-        await syncBaseItemRelation(relatedItemData, payload.role, itemData.id);
-        characterRelationChanged = await syncItemOwnerToCharacter(relatedItemData, payload.role, itemData.id, allItems) || characterRelationChanged;
-    }
 
     document.dispatchEvent(new CustomEvent('dataChanged', { detail: { type: 'itens' } }));
     if (characterRelationChanged) {
@@ -1408,36 +1327,8 @@ export async function importItem(file) {
 document.addEventListener('DOMContentLoaded', () => {
     syncItemReceiverIconControls();
     populateItemAumentosSelect();
-    setupItemRelationsModal();
 
     document.addEventListener('periciasUpdated', populateItemAumentosSelect);
-
-    const roleSelect = document.getElementById('item-card-role');
-    if (roleSelect) {
-        roleSelect.addEventListener('change', async () => {
-            const baseSelect = document.getElementById('item-base-card-select');
-            await populateItemBaseCardSelect(baseSelect?.value || '', currentEditingItemId);
-            updateItemRoleUi();
-        });
-    }
-
-    RELATED_ITEM_ROLES.forEach(role => {
-        document.getElementById(`item-create-${role}-card`)?.addEventListener('click', async () => {
-            await startRelatedItemCreation(role);
-        });
-    });
-
-    const sameImageCheckbox = document.getElementById('related-item-base-image-option');
-    if (sameImageCheckbox) {
-        sameImageCheckbox.addEventListener('change', (e) => {
-            if (!pendingRelatedItemCreation) {
-                e.currentTarget.checked = false;
-                return;
-            }
-            pendingRelatedItemCreation.useBaseImage = e.currentTarget.checked;
-            applyRelatedItemBaseImageOption();
-        });
-    }
 
     const addBtn = document.getElementById('add-item-aumento-btn');
     if (addBtn) {
@@ -1455,8 +1346,6 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    updateItemInlineRelatedUi();
-    updateRelatedItemCreationUi();
 });
 
 const itemImageUpload = document.getElementById('itemImageUpload');
@@ -1464,15 +1353,8 @@ if (itemImageUpload) {
     itemImageUpload.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
-            if (pendingRelatedItemCreation) {
-                pendingRelatedItemCreation.useBaseImage = false;
-                const sameImageCheckbox = document.getElementById('related-item-base-image-option');
-                if (sameImageCheckbox) sameImageCheckbox.checked = false;
-                itemImageUpload.disabled = false;
-            }
             itemImageFile = file;
             showImagePreview(document.getElementById('itemImagePreview'), URL.createObjectURL(file));
-            RELATED_ITEM_ROLES.forEach(role => updateItemInlineImagePreview(role));
         }
     });
 }

@@ -1181,9 +1181,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
     applyStatIconVisualState(sheetContainer, 'vida', characterData.attributes.vidaAtual, permanentMaxVida);
     applyStatIconVisualState(sheetContainer, 'mana', characterData.attributes.manaAtual, permanentMaxMana);
 
-    if (isInPlay) {
-        sheetContainer.classList.add('in-play-animation');
-    }
+    sheetContainer.classList.remove('in-play-animation');
 
     const collectionConfigMap = new Map(collectionConfigs.map(config => [config.key, config]));
     const collectionModal = sheetContainer.querySelector(`#character-collection-modal-${uniqueId}`);
@@ -1541,7 +1539,7 @@ export async function renderFullCharacterSheet(characterData, isModal, isInPlay,
         }
     });
 
-    if (isModal || isInPlay) {
+    if (isModal) {
         setTimeout(() => sheetContainer.classList.add('visible'), 10);
     }
 

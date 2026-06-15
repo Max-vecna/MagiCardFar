@@ -607,7 +607,7 @@
             </div>
             <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <button type="button" id="related-action-create-btn" class="related-action-choice">
-                    <strong>Criar formulrio em branco</strong>
+                    <strong>Criar formulario em branco</strong>
                     <span>Novo card relacionado neste conjunto.</span>
                 </button>
                 <button type="button" id="related-action-link-btn" class="related-action-choice">
@@ -621,9 +621,14 @@
     <div id="item-creation-section" class="hidden">
 
          <div class="form-container" style="max-width: 1000px;">
-            <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
+            <div class="flex justify-between items-center gap-3 mb-4 border-b border-gray-700 pb-2">
                 <h2 id="item-form-title" class="text-2xl font-bold text-amber-300">Novo Item</h2>
-                <button id="close-item-form-btn" class="text-gray-400 hover:text-white text-3xl font-bold" type="button">Fechar</button>
+                <div class="item-form-header-actions">
+                    <button type="submit" form="itemForm" id="itemSubmitButton" class="py-2 px-4 rounded-full text-base font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-lg">
+                        Salvar Item
+                    </button>
+                    <button id="close-item-form-btn" class="text-gray-400 hover:text-white text-3xl font-bold" type="button">Fechar</button>
+                </div>
             </div>
             <form id="itemForm" class="space-y-3">
                  <div class="flex flex-col md:flex-row gap-4">
@@ -636,10 +641,6 @@
                                  <i class="fas fa-box text-3xl"></i>
                              </div>
                         </div>
-                        <label id="related-item-base-image-option-wrapper" for="related-item-base-image-option" class="related-base-image-toggle related-base-image-toggle--item hidden">
-                            <input type="checkbox" id="related-item-base-image-option" class="rounded border-gray-600 bg-gray-800 text-amber-500 focus:ring-amber-500">
-                            <span>Usar imagem do card base</span>
-                        </label>
                     </div>
                      <div class="w-full md:w-4/5 space-y-3">
                          <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -710,47 +711,6 @@
                             <label for="itemCharacterOwner" class="block text-xs font-semibold text-gray-400 mb-1">Dono (Opcional)</label>
                             <select id="itemCharacterOwner" class="w-full px-3 py-1.5 bg-gray-700 text-white text-sm rounded border border-gray-600 focus:border-amber-500 focus:outline-none"></select>
                         </div>
-                        <div class="grid grid-cols-1 md:grid-cols-3 gap-3 bg-gray-800/50 p-3 rounded border border-gray-700/50">
-                            <div>
-                                <label for="item-card-role" class="block text-xs font-semibold text-gray-400 mb-1">Tipo do card</label>
-                                <select id="item-card-role" class="w-full px-3 py-1.5 bg-gray-700 text-white text-sm rounded border border-gray-600 focus:border-amber-500 focus:outline-none">
-                                    <option value="base">Base</option>
-                                    <option value="enhance">Aprimorar</option>
-                                    <option value="true">Verdadeiro</option>
-                                </select>
-                            </div>
-                            <div id="item-base-card-wrapper" class="hidden">
-                                <label for="item-base-card-select" class="block text-xs font-semibold text-gray-400 mb-1">Card base</label>
-                                <select id="item-base-card-select" class="w-full px-3 py-1.5 bg-gray-700 text-white text-sm rounded border border-gray-600 focus:border-amber-500 focus:outline-none"></select>
-                            </div>
-
-                        </div>
-                        <div id="item-inline-related-options" class="bg-gray-800/50 p-3 rounded border border-amber-500/30">
-                            <input type="hidden" id="itemEnhanceCardId">
-                            <input type="hidden" id="itemTrueCardId">
-                            <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                <h3 class="text-xs font-bold text-amber-300 uppercase">Criar relacionado</h3>
-                            </div>
-                            <div id="item-base-text-fields" class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
-                                <div id="item-enhance-text-wrapper">
-                                    <label for="itemEnhanceText" class="block text-xs font-semibold text-gray-400 mb-1">Aprimorar</label>
-                                    <textarea id="itemEnhanceText" rows="3" class="w-full h-36 px-3 py-1.5 bg-gray-700 text-white rounded border border-gray-600 text-sm focus:border-amber-500 focus:outline-none"></textarea>
-                                </div>
-                                <div id="item-true-text-wrapper">
-                                    <label for="itemTrueText" class="block text-xs font-semibold text-gray-400 mb-1">Verdadeiro</label>
-                                    <textarea id="itemTrueText" rows="3" class="w-full h-36 px-3 py-1.5 bg-gray-700 text-white rounded border border-gray-600 text-sm focus:border-amber-500 focus:outline-none"></textarea>
-                                </div>
-                            </div>
-                            <div id="item-inline-related-sections" class="space-y-3 mt-3"></div>
-                            <div id="related-item-creation-panel" class="hidden mt-3 bg-amber-950/30 border border-amber-500/30 rounded-lg p-3">
-                                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
-                                    <div>
-                                        <p class="text-xs font-bold uppercase tracking-wide text-amber-200">Criando item relacionado</p>
-                                        <p class="text-sm text-gray-200">Ao salvar, este novo item será ligado automaticamente a <span id="related-item-base-name" class="font-semibold text-amber-200">card base</span> em <span id="related-item-target-slot" class="font-semibold text-amber-200">Aprimorar</span>.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
                         <div class="bg-gray-800/50 p-2 rounded border border-gray-700/50 grid grid-cols-2 md:grid-cols-4 gap-3">
                             <div>
                                 <label for="itemType" class="block text-[10px] text-gray-500 uppercase mb-1">Tipo</label>
@@ -798,29 +758,7 @@
                     </div>
                     <div id="item-aumentos-list" class="flex flex-wrap gap-2"></div>
                 </div>
-                <div class="pt-2">
-                    <button type="submit" id="itemSubmitButton" class="w-full py-2 px-4 rounded-full text-base font-bold text-white bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 shadow-lg">
-                        Salvar Item
-                    </button>
-                </div>
             </form>
-        </div>
-    </div>
-
-    <div id="item-relations-modal" class="hidden fixed inset-0 bg-black/70 flex items-center justify-center z-[9999] p-4">
-        <div class="form-container w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
-            <div class="flex justify-between items-center mb-4 border-b border-gray-700 pb-2">
-                <div>
-                    <h2 class="text-xl font-bold text-amber-300">Relacionar Itens</h2>
-                    <p class="text-xs text-gray-400">Selecione itens ja criados para Aprimorar e Verdadeiro.</p>
-                </div>
-                <button type="button" id="close-item-relations-modal-btn" class="text-gray-400 hover:text-white text-3xl font-bold">&times;</button>
-            </div>
-            <div class="flex gap-2 mb-3">
-                <button type="button" class="spell-relation-tab active" data-relation-type="enhance">Aprimorar</button>
-                <button type="button" class="spell-relation-tab" data-relation-type="true">Verdadeiro</button>
-            </div>
-            <div id="item-relations-list" class="grid grid-cols-1 md:grid-cols-2 gap-2 overflow-y-auto pr-1"></div>
         </div>
     </div>
 

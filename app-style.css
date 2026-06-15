@@ -3696,3 +3696,78 @@ nav {
         }
 
 
+#item-creation-section::after {
+    display: none;
+}
+
+#item-creation-section .form-container {
+    padding-bottom: 1.35rem !important;
+}
+
+#item-creation-section .form-container > .flex:first-child {
+    align-items: center;
+}
+
+#item-form-title {
+    min-width: 0;
+}
+
+.item-form-header-actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 0.5rem;
+    flex: 0 0 auto;
+}
+
+#item-creation-section #itemSubmitButton {
+    position: static !important;
+    left: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    transform: none !important;
+    width: auto !important;
+    min-width: 116px !important;
+    height: 38px !important;
+    padding: 0 0.95rem !important;
+    border-radius: 8px !important;
+    font-size: 0.86rem !important;
+    line-height: 1 !important;
+    box-shadow: none !important;
+}
+
+.bulk-delete-toolbar__button--icon {
+    width: 2.35rem;
+    min-width: 2.35rem;
+    height: 2.35rem;
+    min-height: 2.35rem;
+    flex: 0 0 2.35rem !important;
+    padding: 0 !important;
+    gap: 0;
+}
+
+.bulk-delete-toolbar__button--icon i {
+    pointer-events: none;
+}
+
+@media (max-width: 640px) {
+    #item-creation-section .form-container > .flex:first-child {
+        flex-wrap: wrap;
+    }
+
+    .item-form-header-actions {
+        margin-left: auto;
+    }
+
+    #item-creation-section #itemSubmitButton {
+        min-width: 104px !important;
+        height: 36px !important;
+        padding: 0 0.8rem !important;
+        font-size: 0.8rem !important;
+    }
+
+    .bulk-delete-toolbar__button--icon {
+        flex: 0 0 2.35rem !important;
+    }
+}
+

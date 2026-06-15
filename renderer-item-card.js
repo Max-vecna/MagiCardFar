@@ -1,10 +1,5 @@
 import { applyDarkModalBackdrop, bufferToBlob, shrinkExpandedCardSize } from './ui-utils.js';
 import { hasArenaModel, renderArenaModelSheet } from './renderer-arena-model.js';
-import {
-    buildRelatedCardCarousel,
-    getRelatedCardGroup,
-    setupRelatedCardCarousel
-} from './ui-related-card-carousel.js';
 
 function resolveItemCardSize(aspectRatio, options = {}, shrinkExpanded = false) {
     const finalize = size => shrinkExpanded ? shrinkExpandedCardSize(size) : size;
@@ -166,59 +161,6 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
     const uniqueId = `item-${itemData.id}-${Date.now()}`;
 
     if (hasArenaModel(itemData)) {
-        if (!isModal) {
-            return renderArenaModelSheet(itemData, false, {
-                ...options,
-                containerId: 'item-sheet-container'
-            });
-        }
-
-        const { cards: relatedCards, activeIndex } = await getRelatedCardGroup(itemData, 'rpgItems');
-        if (relatedCards.length > 1) {
-            const index = document.getElementsByClassName('visible').length;
-            sheetContainer.style.zIndex = 100000000 + index;
-            sheetContainer.innerHTML = await buildRelatedCardCarousel({
-                relatedCards,
-                activeIndex,
-                width: finalWidth,
-                height: finalHeight,
-                closeButtonHtml: `
-                    <button id="close-item-sheet-btn-${uniqueId}" class="spell-carousel-close absolute top-4 right-4 bg-red-600 hover:text-white z-50 thumb-btn" style="display:block;">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                `,
-                renderCard: card => renderFullItemSheet(card, false, {
-                    cardWidth: finalWidth,
-                    cardHeight: finalHeight
-                })
-            });
-
-            applyDarkModalBackdrop(sheetContainer);
-            sheetContainer.classList.remove('hidden');
-            setTimeout(() => sheetContainer.classList.add('visible'), 10);
-            setupRelatedCardCarousel(sheetContainer);
-
-            const closeSheet = () => {
-                sheetContainer.classList.remove('visible');
-                const handler = () => {
-                    sheetContainer.classList.add('hidden');
-                    sheetContainer.innerHTML = '';
-                    sheetContainer.removeEventListener('transitionend', handler);
-                };
-                sheetContainer.addEventListener('transitionend', handler);
-            };
-
-            sheetContainer.querySelector(`#close-item-sheet-btn-${uniqueId}`)?.addEventListener('click', closeSheet);
-            const overlayHandler = (event) => {
-                if (event.target === sheetContainer || event.target?.classList?.contains('spell-carousel-modal-layout')) {
-                    closeSheet();
-                    sheetContainer.removeEventListener('click', overlayHandler);
-                }
-            };
-            sheetContainer.addEventListener('click', overlayHandler);
-            return;
-        }
-
         return renderArenaModelSheet(itemData, isModal, {
             ...options,
             containerId: 'item-sheet-container'
@@ -284,9 +226,7 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
                 <div class="sheet-card-text-panel sheet-description-panel">
                   <div class="sheet-description-scroll space-y-3 overflow-y-auto pr-2">
                         ${[
-                            { label: 'Descrição', value: itemData.effect },
-                            { label: 'Aprimorar', value: itemData.enhance, hidden: Boolean(itemData.enhanceCardId) },
-                            { label: 'Verdadeiro', value: itemData.true, hidden: Boolean(itemData.trueCardId) }
+                            { label: 'Descrição', value: itemData.effect }
                         ].filter(section => section.value && !section.hidden).map(section => `
                             <div class="pt-2">
                                 <h3 class="text-sm font-semibold flex items-center gap-2">${escapeHtml(section.label)}</h3>
@@ -301,28 +241,7 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
 
     if (!isModal) return sheetHtml;
 
-    const { cards: relatedCards, activeIndex } = await getRelatedCardGroup(itemData, 'rpgItems');
-    const carouselObjectUrls = [];
-    if (relatedCards.length > 1) {
-        sheetContainer.innerHTML = await buildRelatedCardCarousel({
-            relatedCards,
-            activeIndex,
-            width: finalWidth,
-            height: finalHeight,
-            closeButtonHtml: `
-                <button id="close-item-sheet-btn-${uniqueId}" class="spell-carousel-close absolute top-4 right-4 bg-red-600 hover:text-white z-50 thumb-btn" style="display:block;">
-                    <i class="fa-solid fa-xmark"></i>
-                </button>
-            `,
-            renderCard: card => renderFullItemSheet(card, false, {
-                cardWidth: finalWidth,
-                cardHeight: finalHeight,
-                objectUrls: carouselObjectUrls
-            })
-        });
-    } else {
-        sheetContainer.innerHTML = sheetHtml;
-    }
+    sheetContainer.innerHTML = sheetHtml;
 
     applyDarkModalBackdrop(sheetContainer);
     sheetContainer.classList.remove('hidden');
@@ -334,7 +253,6 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
             sheetContainer.classList.add('hidden');
             sheetContainer.innerHTML = '';
             if (createdObjectUrl && !objectUrlCollector) URL.revokeObjectURL(createdObjectUrl);
-            carouselObjectUrls.forEach(url => URL.revokeObjectURL(url));
             sheetContainer.removeEventListener('transitionend', handler);
         };
         sheetContainer.addEventListener('transitionend', handler);
@@ -346,8 +264,6 @@ export async function renderFullItemSheet(itemData, isModal, options = {}) {
         closeBtn.parentNode.replaceChild(newBtn, closeBtn);
         newBtn.addEventListener('click', closeSheet);
     }
-
-    setupRelatedCardCarousel(sheetContainer);
 
     const overlayHandler = (e) => {
         if (e.target === sheetContainer || e.target?.classList?.contains('spell-carousel-modal-layout')) {

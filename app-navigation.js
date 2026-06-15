@@ -21,8 +21,8 @@ export function isCombatActive() {
     return false;
 }
 
-const RELATED_GRID_TYPES = new Set(['magias', 'habilidades', 'ataques', 'itens']);
-const RELATED_CARD_TYPES = new Set(['spell', 'attack', 'item']);
+const RELATED_GRID_TYPES = new Set(['magias', 'habilidades', 'ataques']);
+const RELATED_CARD_TYPES = new Set(['spell', 'attack']);
 const ROLE_LABELS = {
     base: 'Base',
     enhance: 'Aprimorar',
@@ -245,6 +245,13 @@ async function getRelatedDeleteTargets(storeName, cardId) {
 
     const selectedCard = await getData(storeName, cardId);
     if (!selectedCard) return [];
+    if (storeName === 'rpgItems') {
+        return [{
+            role: 'base',
+            id: String(selectedCard.id || cardId),
+            card: selectedCard
+        }];
+    }
 
     const cards = (await getData(storeName)) || [];
     const cardsById = new Map(cards.map(card => [String(card?.id || ''), card]).filter(([id]) => id));
@@ -487,13 +494,11 @@ function createBulkDeleteToolbar() {
     toolbar.className = 'bulk-delete-toolbar';
     toolbar.dataset.bulkDeleteToolbar = 'true';
     toolbar.innerHTML = `
-        <button type="button" class="bulk-delete-toolbar__button bulk-delete-toolbar__button--select" data-bulk-action="start" title="Selecionar cards">
-            <i class="fas fa-bullseye"></i>
-            <span>Selecionar</span>
+        <button type="button" class="bulk-delete-toolbar__button bulk-delete-toolbar__button--icon bulk-delete-toolbar__button--select" data-bulk-action="start" title="Selecionar cards" aria-label="Selecionar cards">
+            <i class="fas fa-square-check"></i>
         </button>
-        <button type="button" class="bulk-delete-toolbar__button bulk-delete-toolbar__button--model-reset" data-bulk-action="reset-arena-models" title="Remover modelo Arena exportado">
+        <button type="button" class="bulk-delete-toolbar__button bulk-delete-toolbar__button--icon bulk-delete-toolbar__button--model-reset" data-bulk-action="reset-arena-models" title="Remover modelo Arena exportado" aria-label="Remover modelo Arena exportado">
             <i class="fas fa-rotate-left"></i>
-            <span>Modelo padrao</span>
         </button>
         <span class="bulk-delete-toolbar__status" data-bulk-status>0 selecionados</span>
         <button type="button" class="bulk-delete-toolbar__button bulk-delete-toolbar__button--danger" data-bulk-action="delete" disabled title="Apagar selecionados">
@@ -942,7 +947,7 @@ export async function openSelectionModal(type) {
 }
 async function createItemGrid(items, type) {
     const gridContainer = document.createElement('div');
-    gridContainer.className = 'grid gap-4 w-full justify-items-center grid-cols-4 md:grid-cols-4 lg:grid-cols-5';
+    gridContainer.className = 'grid gap-4 w-full justify-items-center grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
 
     if (items.length === 0) return gridContainer;
 
@@ -1182,7 +1187,9 @@ async function renderCharacterList(container, listType = 'character') {
     const importBtnId = isCreatureList ? 'import-creatures-btn' : 'import-cards-btn';
     const importInputId = isCreatureList ? 'import-creature-json-input' : 'import-json-input';
 
-    container.appendChild(createCardListActionBar({
+    const pageContainer = document.createElement('div');
+    pageContainer.className = 'card-list-page w-full p-6 space-y-6';
+    pageContainer.appendChild(createCardListActionBar({
         addAction: isCreatureList ? 'add-creature' : 'add-character',
         addLabel: isCreatureList ? 'Adicionar Criatura' : 'Adicionar Personagem',
         importBtnId,
@@ -1191,10 +1198,10 @@ async function renderCharacterList(container, listType = 'character') {
     }));
 
     const gridContainer = document.createElement('div');
-    gridContainer.className = 'grid gap-4 w-full justify-items-center grid-cols-3 md:grid-cols-4 lg:grid-cols-5 p-6 pt-4';
+    gridContainer.className = 'grid gap-4 w-full justify-items-center grid-cols-3 md:grid-cols-4 lg:grid-cols-5';
 
     if (allCharacters.length === 0) {
-        container.appendChild(createEmptyCardsMessage());
+        pageContainer.appendChild(createEmptyCardsMessage());
     }
 
     const cardElements = allCharacters.map((char) => {
@@ -1228,8 +1235,9 @@ async function renderCharacterList(container, listType = 'character') {
     });
 
     cardElements.forEach(el => gridContainer.appendChild(el));
-    container.appendChild(gridContainer);
-    setupBulkDeleteControls(container, isCreatureList ? 'criaturas' : 'personagem');
+    pageContainer.appendChild(gridContainer);
+    container.appendChild(pageContainer);
+    setupBulkDeleteControls(pageContainer, isCreatureList ? 'criaturas' : 'personagem');
 
     document.getElementById(importBtnId).addEventListener('click', () => {
         document.getElementById(importInputId).click();

@@ -43,9 +43,25 @@ export function showCustomAlert(message) {
 }
 
 export function shrinkExpandedCardSize(size = {}, amount = 10) {
-    const finalWidth = Math.max(1, Number(size.finalWidth || size.width || 0) - amount);
-    const finalHeight = Math.max(1, Number(size.finalHeight || size.height || 0) - amount);
-    return { finalWidth, finalHeight };
+    const width = Number(size.finalWidth || size.width || 0);
+    const height = Number(size.finalHeight || size.height || 0);
+    const viewportWidth = window.innerWidth || width;
+    const isMobile = window.matchMedia?.('(max-width: 640px)').matches || viewportWidth <= 640;
+    const shrinkAmount = isMobile ? Math.max(amount, 32) : amount;
+
+    if (!(width > 0) || !(height > 0)) {
+        return { finalWidth: Math.max(1, width), finalHeight: Math.max(1, height) };
+    }
+
+    const scale = Math.min(
+        Math.max(0.1, (width - shrinkAmount) / width),
+        Math.max(0.1, (height - shrinkAmount) / height)
+    );
+
+    return {
+        finalWidth: Math.max(1, width * scale),
+        finalHeight: Math.max(1, height * scale)
+    };
 }
 
 export function showTopAlert(message, duration = 3000, type = 'info') {
